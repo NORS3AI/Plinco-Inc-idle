@@ -13,11 +13,14 @@
 
     <div class="topbar">
       <div id="goldDisplay" class="gold-display">0g</div>
-      <button id="menuBtn" class="menu-btn" hidden>Upgrades</button>
+      <div class="topbar-btns">
+        <button id="menuBtn" class="menu-btn" hidden>Upgrades</button>
+        <button id="settingsBtn" class="menu-btn icon-btn" aria-label="Settings">&#9881;</button>
+      </div>
     </div>
 
     <canvas id="game" width="400" height="640" aria-label="Plinko game board"></canvas>
-    <p class="hint">Outer chambers pay more. Center pays less.</p>
+    <p class="hint">Center pays more. Outer edges pay less.</p>
   </main>
 
   <div id="overlay" class="overlay" hidden>
@@ -27,6 +30,42 @@
         <button id="closeBtn" class="close-btn" aria-label="Close">&times;</button>
       </div>
       <div id="upgradeList" class="upgrade-list"></div>
+    </div>
+  </div>
+
+  <div id="settingsOverlay" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Settings</h2>
+        <button id="settingsCloseBtn" class="close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div class="upgrade-list">
+        <div class="set-row">
+          <span class="set-label">Music</span>
+          <button id="setMusic" class="toggle" role="switch"></button>
+        </div>
+        <div class="set-row">
+          <span class="set-label">Sound FX</span>
+          <button id="setFx" class="toggle" role="switch"></button>
+        </div>
+        <div class="set-row">
+          <span class="set-label">Mute All</span>
+          <button id="setMute" class="toggle" role="switch"></button>
+        </div>
+
+        <div class="section-label">Debug</div>
+        <div class="set-row">
+          <span class="set-label">Add gold</span>
+          <button id="dbgGold" class="buy-btn">+100g</button>
+        </div>
+        <div class="set-row set-col">
+          <div class="set-slider-head">
+            <span class="set-label">Chamber gap</span>
+            <span id="dbgGapVal" class="set-val">28px</span>
+          </div>
+          <input id="dbgGap" class="slider" type="range" min="12" max="100" step="1" value="28">
+        </div>
+      </div>
     </div>
   </div>
 

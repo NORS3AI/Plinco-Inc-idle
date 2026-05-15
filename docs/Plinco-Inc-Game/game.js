@@ -10,6 +10,16 @@
   const closeBtn = document.getElementById('closeBtn');
   const upgradeList = document.getElementById('upgradeList');
 
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsOverlay = document.getElementById('settingsOverlay');
+  const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+  const setMusic = document.getElementById('setMusic');
+  const setFx = document.getElementById('setFx');
+  const setMute = document.getElementById('setMute');
+  const dbgGold = document.getElementById('dbgGold');
+  const dbgGap = document.getElementById('dbgGap');
+  const dbgGapVal = document.getElementById('dbgGapVal');
+
   // ---- Layout ----
   const COIN = { x: W / 2, y: 64, r: 30 };
   const BAR  = { x: (W - 200) / 2, y: COIN.y + COIN.r + 6, w: 200, h: 10 };
@@ -19,8 +29,8 @@
   const ENTRY_GAP = 12;          // drop point -> first peg row
   const CONTENT_BOTTOM = H - 14;  // floor never goes below this
   const CHAMBER_H = 35;          // short slot
-  const GAP_TO_SLOT = 28;        // gap from last peg row to the slot
   const PREFERRED_GAP = 78;      // ideal vertical spacing between peg rows
+  // gap from last peg row to the slot — tunable via Debug settings for now
 
   let LO = null;                 // current frame's board layout
 
@@ -47,6 +57,13 @@
     ballRainbow: 0,
   });
 
+  const defaultSettings = () => ({
+    music: true,
+    fx: true,
+    mute: false,
+    gapToSlot: 28,
+  });
+
   const state = {
     gold: 0,
     maxGold: 0,
@@ -56,6 +73,7 @@
     queue: 0,
     queueTimer: 0,
     upg: defaultUpg(),
+    settings: defaultSettings(),
   };
 
   // ---- Board geometry (dynamic) ----
@@ -83,14 +101,15 @@
   }
 
   // Lay out the peg rows + slot. First row sits ENTRY_GAP below the drop
-  // point; slot sits GAP_TO_SLOT below the last row. Rows use PREFERRED_GAP
+  // point; slot sits gapToSlot below the last row. Rows use PREFERRED_GAP
   // spacing, compressing only if a tall board would overflow the canvas.
   function computeLayout() {
     const R = rowsCount();
     const cw = chamberW();
     const spacing = 2 * cw;
+    const gapToSlot = state.settings.gapToSlot;
     const startY = SPAWN_Y + ENTRY_GAP;
-    const tail = GAP_TO_SLOT + CHAMBER_H;
+    const tail = gapToSlot + CHAMBER_H;
     const maxSpan = CONTENT_BOTTOM - tail - startY;
     const gap = R > 1 ? Math.min(PREFERRED_GAP, maxSpan / (R - 1)) : 0;
 
@@ -103,7 +122,7 @@
     }
 
     const lastRowY = startY + (R - 1) * gap;
-    const chamberTop = lastRowY + GAP_TO_SLOT;
+    const chamberTop = lastRowY + gapToSlot;
     return {
       pegs,
       chamberTop,
@@ -167,6 +186,7 @@
         gold: state.gold,
         maxGold: state.maxGold,
         upg: state.upg,
+        settings: state.settings,
       }));
     } catch {}
   }
@@ -177,6 +197,7 @@
       if (typeof s.gold === 'number') state.gold = s.gold;
       state.maxGold = typeof s.maxGold === 'number' ? s.maxGold : state.gold;
       if (s.upg) Object.assign(state.upg, s.upg);
+      if (s.settings) Object.assign(state.settings, s.settings);
     } catch {}
   }
   load();
@@ -279,6 +300,75 @@
   closeBtn.addEventListener('click', closePanel);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closePanel(); });
 
+  // ---- Audio (lazy WebAudio FX) ----
+  let audioCtx = null;
+  function ensureAudio() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch {}
+  }
+  function sfx(kind) {
+    const s = state.settings;
+    if (s.mute || !s.fx || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    if (kind === 'drop') {
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(440, t);
+      o.frequency.exponentialRampToValueAtTime(220, t + 0.08);
+      g.gain.setValueAtTime(0.10, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.10);
+      o.start(t); o.stop(t + 0.11);
+    } else {
+      o.type = 'sine';
+      o.frequency.setValueAtTime(740, t);
+      o.frequency.setValueAtTime(988, t + 0.06);
+      g.gain.setValueAtTime(0.12, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.start(t); o.stop(t + 0.19);
+    }
+  }
+
+  // ---- Settings DOM ----
+  function syncSettingsUI() {
+    setMusic.setAttribute('aria-checked', String(state.settings.music));
+    setFx.setAttribute('aria-checked', String(state.settings.fx));
+    setMute.setAttribute('aria-checked', String(state.settings.mute));
+    dbgGap.value = String(state.settings.gapToSlot);
+    dbgGapVal.textContent = state.settings.gapToSlot + 'px';
+  }
+  function openSettings() {
+    settingsOverlay.hidden = false;
+    ensureAudio();
+    syncSettingsUI();
+  }
+  function closeSettings() { settingsOverlay.hidden = true; }
+  settingsBtn.addEventListener('click', openSettings);
+  settingsCloseBtn.addEventListener('click', closeSettings);
+  settingsOverlay.addEventListener('click', (e) => {
+    if (e.target === settingsOverlay) closeSettings();
+  });
+
+  function toggleSetting(key) {
+    state.settings[key] = !state.settings[key];
+    save();
+    syncSettingsUI();
+  }
+  setMusic.addEventListener('click', () => toggleSetting('music'));
+  setFx.addEventListener('click', () => toggleSetting('fx'));
+  setMute.addEventListener('click', () => toggleSetting('mute'));
+
+  dbgGold.addEventListener('click', () => addGold(100));
+  dbgGap.addEventListener('input', () => {
+    const v = Math.max(12, Math.min(100, parseInt(dbgGap.value, 10) || 28));
+    state.settings.gapToSlot = v;
+    dbgGapVal.textContent = v + 'px';
+    save();
+  });
+
   const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc',
                  'Ud', 'Dd', 'Td', 'Qad', 'Qid', 'Sxd', 'Spd', 'Ocd', 'Nod', 'Vg'];
   function fmt(n) {
@@ -361,6 +451,7 @@
   }
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    ensureAudio();
     const p = canvasPoint(e);
     if (!tappedCoin(p)) return;
     if (state.cooldown <= 0) {
@@ -383,6 +474,7 @@
       mult: t.mult,
       color: t.color,
     });
+    sfx('drop');
   }
 
   // ---- Physics ----
@@ -442,6 +534,7 @@
         const isCrit = Math.random() < critChance();
         if (isCrit) value = Math.ceil(value * 1.1);
         addGold(value);
+        sfx('score');
         state.floaters.push({
           x: idx * cw + cw / 2,
           y: chamberTop - 6,
