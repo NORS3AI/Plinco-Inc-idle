@@ -18,7 +18,7 @@
   const CONTENT_TOP = 150;       // first peg row never goes above this
   const CONTENT_BOTTOM = H - 14; // floor never goes below this
   const CHAMBER_H = 35;          // short slot
-  const GAP_TO_SLOT = 28;        // distance from last peg row to slot
+  const GAP_TO_SLOT = 12;        // slot sits right under the last peg row
   const PREFERRED_GAP = 78;      // ideal vertical spacing between peg rows
 
   let LO = null;                 // current frame's board layout
