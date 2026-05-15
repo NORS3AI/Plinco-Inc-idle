@@ -1,6 +1,6 @@
 # Plinco Inc.
 
-An incremental / idle game where you build a Plinko empire one bouncing chip at a time.
+An incremental / idle game where you build a Plinko empire one bouncing chip at a time. [Play Game](https://nors3ai.github.io/Plinco-Inc-idle/Plinco-Inc-Game/)
 
 ## Status
 
