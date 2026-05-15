@@ -43,12 +43,29 @@
 
   const BALL_R = 8;
   const GRAVITY = 700;
-  const RESTITUTION = 0.92;       // normal pegs — super bouncy
-  const DULL_RESTITUTION = 0.18;  // top (first) peg — absorbs most bounce
+  const RESTITUTION = 0.92;       // all pegs — super bouncy
   const WALL_RESTITUTION = 0.85;  // side walls — extra bouncy
+  const TINY_SCALE = 0.25;        // bonus peg size relative to a normal peg
   const MOVER_LEN = 70;           // moving bar length
   const MOVER_T = 7;              // moving bar thickness
   // Each bar moves independently across the board (its own fixed speed).
+  // Persistent per-bonus-peg data (color/value fixed once; respawn timer).
+  const _tinyMeta = new Map();
+  function tinyMeta(id) {
+    let m = _tinyMeta.get(id);
+    if (!m) {
+      const red = Math.random() < 0.28;
+      m = {
+        red,
+        gold: red ? 4 + Math.floor(Math.random() * 2)   // 4-5
+                  : 1 + Math.floor(Math.random() * 3),  // 1-3
+        until: 0,
+      };
+      _tinyMeta.set(id, m);
+    }
+    return m;
+  }
+
   const movers = Array.from({ length: 5 }, (_, i) => ({
     x: MOVER_LEN / 2 + Math.random() * (W - MOVER_LEN),
     dir: Math.random() < 0.5 ? -1 : 1,
@@ -63,6 +80,7 @@
     crit: 0,
     recharge: 0,
     rows: 0,        // 0..4  -> rows = 2 + rows  (board 2..6)
+    tinyPegs: 0,    // 0..5  -> bonus pegs per gap
     movers: 0,      // 0..5  -> moving bars between rows
     randomDrop: 0,  // 0/1   -> random "rain" drop instead of dead center
     autoDrop: 0,
@@ -139,7 +157,29 @@
       const y = startY + (k - 1) * gap;
       rowYs.push(y);
       for (let j = 0; j < k; j++) {
-        pegs.push({ x: W / 2 + (j - (k - 1) / 2) * spacing, y, dull: k === 1 });
+        pegs.push({ x: W / 2 + (j - (k - 1) / 2) * spacing, y });
+      }
+    }
+
+    // Bonus (tiny) pegs: L per gap, between & outside the big pegs on each row.
+    const tinies = [];
+    const L = state.upg.tinyPegs;
+    if (L > 0) {
+      const tr = PEG_R * TINY_SCALE;
+      for (let k = 1; k <= R; k++) {
+        const y = rowYs[k - 1];
+        const xs = [];
+        for (let j = 0; j < k; j++) xs.push(W / 2 + (j - (k - 1) / 2) * spacing);
+        const regions = [[xs[0] - spacing, xs[0]]];
+        for (let j = 0; j < k - 1; j++) regions.push([xs[j], xs[j + 1]]);
+        regions.push([xs[k - 1], xs[k - 1] + spacing]);
+        regions.forEach((reg, ri) => {
+          for (let t = 0; t < L; t++) {
+            const x = reg[0] + ((t + 1) / (L + 1)) * (reg[1] - reg[0]);
+            if (x < tr + 2 || x > W - tr - 2) continue;
+            tinies.push({ x, y, r: tr, id: `${k}:${ri}:${t}` });
+          }
+        });
       }
     }
 
@@ -147,6 +187,7 @@
     const chamberTop = lastRowY + gapToSlot;
     return {
       pegs,
+      tinies,
       rowYs,
       chamberTop,
       floorY: chamberTop + CHAMBER_H,
@@ -294,6 +335,13 @@
       cost: () => 1000 * Math.pow(10, state.upg.rows),
       desc: () => `Board: ${chamberCount()} rows. Adds row ${chamberCount() + 1} (+1 chamber, max 6 rows).`,
       buy() { state.upg.rows++; },
+    },
+    {
+      id: 'tinyPegs', name: 'Bonus Pegs', unlockAt: 100, maxLevel: 5,
+      level: () => state.upg.tinyPegs,
+      cost: () => 100 * Math.pow(2, state.upg.tinyPegs),
+      desc: () => `Adds small bonus pegs between & beside the pegs. Green = 1–3g, red = 4–5g; vanish 5s when struck. Lv ${state.upg.tinyPegs}/5.`,
+      buy() { state.upg.tinyPegs++; },
     },
     {
       id: 'movers', name: 'Moving Bar', unlockAt: 1000, maxLevel: 5,
@@ -597,7 +645,8 @@
     }
     const activeMovers = moverList();
 
-    const { pegs, values, n, cw, chamberTop } = LO;
+    const { pegs, tinies, values, n, cw, chamberTop } = LO;
+    const now = performance.now();
 
     for (const b of state.balls) {
       if (b.done) continue;
@@ -617,11 +666,39 @@
           b.y = p.y + ny * md;
           const vn = b.vx * nx + b.vy * ny;
           if (vn < 0) {
-            const e = p.dull ? DULL_RESTITUTION : RESTITUTION;
-            b.vx -= (1 + e) * vn * nx;
-            b.vy -= (1 + e) * vn * ny;
+            b.vx -= (1 + RESTITUTION) * vn * nx;
+            b.vy -= (1 + RESTITUTION) * vn * ny;
           }
           b.vx += (Math.random() - 0.5) * 60;
+        }
+      }
+
+      for (const tp of tinies) {
+        const meta = tinyMeta(tp.id);
+        if (now < meta.until) continue;          // hidden / respawning
+        const dx = b.x - tp.x, dy = b.y - tp.y;
+        const d2 = dx * dx + dy * dy;
+        const md = BALL_R + tp.r;
+        if (d2 < md * md && d2 > 0.0001) {
+          const d = Math.sqrt(d2);
+          const nx = dx / d, ny = dy / d;
+          b.x = tp.x + nx * md;
+          b.y = tp.y + ny * md;
+          const vn = b.vx * nx + b.vy * ny;
+          if (vn < 0) {
+            b.vx -= (1 + RESTITUTION) * vn * nx;
+            b.vy -= (1 + RESTITUTION) * vn * ny;
+          }
+          b.vx += (Math.random() - 0.5) * 70;
+          addGold(meta.gold);
+          state.floaters.push({
+            x: tp.x, y: tp.y - 8,
+            text: '+' + meta.gold + 'g',
+            crit: false,
+            color: meta.red ? '#ff5a5a' : '#4fdc6a',
+            life: 0,
+          });
+          meta.until = now + 5000;             // vanish for 5s, then fade back
         }
       }
 
@@ -735,16 +812,39 @@
     ctx.restore();
   }
 
+  function triPath(cx, cy, r) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy + r * 0.85);
+    ctx.lineTo(cx - r, cy + r * 0.85);
+    ctx.closePath();
+  }
+
   function drawBoard() {
-    const { pegs, n, cw, values, chamberTop, floorY } = LO;
+    const { pegs, tinies, n, cw, values, chamberTop, floorY } = LO;
+    const now = performance.now();
+
     for (const p of pegs) {
-      const g = ctx.createRadialGradient(p.x - 2, p.y - 2, 1, p.x, p.y, PEG_R);
+      const g = ctx.createLinearGradient(p.x, p.y - PEG_R, p.x, p.y + PEG_R);
       g.addColorStop(0, '#ffffff');
       g.addColorStop(1, '#8a92b8');
       ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(p.x, p.y, PEG_R, 0, Math.PI * 2); ctx.fill();
+      triPath(p.x, p.y, PEG_R); ctx.fill();
       ctx.strokeStyle = '#4a517a';
       ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    for (const tp of tinies) {
+      const m = tinyMeta(tp.id);
+      if (m.until && now < m.until) continue;             // hidden
+      const alpha = m.until ? Math.min(1, (now - m.until) / 600) : 1;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = m.red ? '#ff5a5a' : '#4fdc6a';
+      triPath(tp.x, tp.y, tp.r);
+      ctx.fill();
+      ctx.strokeStyle = m.red ? '#a82020' : '#1f8a3b';
+      ctx.lineWidth = 1; ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     for (const am of moverList()) {
