@@ -42,7 +42,7 @@
 
   const BALL_R = 8;
   const GRAVITY = 700;
-  const RESTITUTION = 0.55;       // normal pegs
+  const RESTITUTION = 0.92;       // normal pegs — super bouncy
   const DULL_RESTITUTION = 0.18;  // top (first) peg — absorbs most bounce
   const WALL_RESTITUTION = 0.85;  // side walls — extra bouncy
   const BASE_RECHARGE_S = 3.0;
