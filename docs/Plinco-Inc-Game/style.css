@@ -78,8 +78,9 @@ h1 {
   inset: 0;
   background: rgba(6, 8, 16, 0.78);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
+  padding: 16px;
   z-index: 50;
 }
 .overlay[hidden] { display: none; }
@@ -87,13 +88,13 @@ h1 {
 .panel {
   width: 100%;
   max-width: 440px;
-  max-height: 82vh;
+  max-height: 85vh;
   background: #14172a;
   border: 1px solid #2a2f4d;
-  border-radius: 16px 16px 0 0;
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 -8px 40px rgba(0,0,0,0.6);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.65);
 }
 
 .panel-head {
