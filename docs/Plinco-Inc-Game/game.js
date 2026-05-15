@@ -86,8 +86,8 @@
   };
 
   // ---- Board geometry (dynamic) ----
-  function rowsCount()    { return 2 + state.upg.rows; }       // 2..10
-  function chamberCount() { return 2 * rowsCount() + 1; }      // 5..21
+  function rowsCount()    { return Math.min(5, 2 + state.upg.rows); } // 2..5
+  function chamberCount() { return 2 * rowsCount() + 1; }      // 5..11
   function chamberW()     { return W / chamberCount(); }
 
   function chamberMultiplier() { return Math.pow(2, state.upg.chamberValue); }
@@ -115,7 +115,7 @@
   function computeLayout() {
     const R = rowsCount();
     const cw = chamberW();
-    const spacing = 2 * cw;
+    const spacing = 2.5 * cw;
     const gapToSlot = state.settings.gapToSlot;
     const startY = SPAWN_Y + state.settings.entryGap;
     const tail = gapToSlot + CHAMBER_H;
@@ -185,7 +185,7 @@
   function cooldownMs() { return rechargeSeconds() * 1000; }
 
   const QUEUE_MAX_LEVEL = 10;
-  const ROWS_MAX_LEVEL = 8; // board rows 2..10
+  const ROWS_MAX_LEVEL = 3; // board rows 2..5
 
   // ---- Persistence ----
   const SAVE_KEY = 'plinco-inc-save-v1';
@@ -277,7 +277,7 @@
       cost: () => (state.upg.rows === 0 ? 500 : 1000),
       desc: () => {
         const R = rowsCount();
-        return `Board: ${R} rows / ${chamberCount()} chambers. +1 row, +2 chambers (max 10 rows).`;
+        return `Board: ${R} rows / ${chamberCount()} chambers. +1 row, +2 chambers (max 5 rows).`;
       },
       buy() { state.upg.rows++; },
     },
