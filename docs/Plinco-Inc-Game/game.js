@@ -82,6 +82,7 @@
     recharge: 0,
     rows: 0,        // 0..4  -> rows = 2 + rows  (board 2..6)
     tinyPegs: 0,    // 0..5  -> bonus pegs per gap
+    tinyValue: 0,   // 0..5  -> bonus peg worth x10 per level
     movers: 0,      // 0..5  -> moving bars between rows
     randomDrop: 0,  // 0/1   -> random "rain" drop instead of dead center
     upgradeAll: 0,  // 0/1   -> unlocks the Upgrade All button
@@ -120,6 +121,8 @@
   function chamberW()     { return W / chamberCount(); }
 
   function chamberMultiplier() { return Math.pow(2, state.upg.chamberValue); }
+  function tinyValueMult() { return Math.pow(10, state.upg.tinyValue); }
+  const TINY_VALUE_COSTS = [50000, 500000, 5000000, 5000000000, 1000000000000];
   function chamberValueCost(level) {
     if (level === 0) return 10;
     if (level === 1) return 50;
@@ -346,6 +349,13 @@
       buy() { state.upg.tinyPegs++; },
     },
     {
+      id: 'tinyValue', name: 'Bonus Peg Value', unlockAt: 50000, maxLevel: 5,
+      level: () => state.upg.tinyValue,
+      cost: () => TINY_VALUE_COSTS[state.upg.tinyValue],
+      desc: () => `Bonus pegs are worth x10 more per level. Now x${fmt(tinyValueMult())}. Lv ${state.upg.tinyValue}/5.`,
+      buy() { state.upg.tinyValue++; },
+    },
+    {
       id: 'movers', name: 'Moving Bar', unlockAt: 1000, maxLevel: 5,
       level: () => state.upg.movers,
       cost: () => [1000, 10000, 100000, 1000000, 1000000000][state.upg.movers],
@@ -534,6 +544,21 @@
     const scaled = n / Math.pow(10, tier * 3);
     const dec = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
     return scaled.toFixed(dec) + UNITS[tier];
+  }
+
+  // Compact label for chambers: <10k plain, else 10k / 1m / 1b / 1t ...
+  const UNITS_LC = ['', 'k', 'm', 'b', 't', 'qa', 'qi', 'sx', 'sp', 'oc', 'no', 'dc',
+                    'ud', 'dd', 'td', 'qad', 'qid', 'sxd', 'spd', 'ocd', 'nod', 'vg'];
+  function fmtShort(n) {
+    n = Math.round(n);
+    if (n < 10000) return String(n);
+    let tier = Math.floor(Math.log10(n) / 3);
+    if (tier < 1) tier = 1;
+    if (tier >= UNITS_LC.length) tier = UNITS_LC.length - 1;
+    const s = n / Math.pow(10, tier * 3);
+    let str = s.toFixed(s < 10 ? 1 : 0);
+    if (str.endsWith('.0')) str = str.slice(0, -2);
+    return str + UNITS_LC[tier];
   }
 
   function renderPanel() {
@@ -744,10 +769,11 @@
             b.vy -= (1 + RESTITUTION) * vn * ny;
           }
           b.vx += (Math.random() - 0.5) * 70;
-          addGold(meta.gold);
+          const g = meta.gold * tinyValueMult();
+          addGold(g);
           state.floaters.push({
             x: tp.x, y: tp.y - 8,
-            text: '+' + meta.gold + 'g',
+            text: '+' + fmt(g) + 'g',
             crit: false,
             color: meta.red ? '#ff5a5a' : '#4fdc6a',
             life: 0,
@@ -959,7 +985,7 @@
       const v = values[i];
       const ratio = (v / chamberMultiplier()) / maxBase; // 1 center .. low edge
       ctx.fillStyle = ratio > 0.66 ? '#f5c842' : ratio > 0.33 ? '#86d6ff' : '#9aa0c8';
-      ctx.fillText(cw >= 34 ? v + 'g' : String(v), cx, cy);
+      ctx.fillText(cw >= 40 ? fmtShort(v) + 'g' : fmtShort(v), cx, cy);
     }
   }
 
