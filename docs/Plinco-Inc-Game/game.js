@@ -185,26 +185,25 @@
       }
     }
 
-    // Bonus (tiny) pegs: 10 per row per level, evenly spread, never
-    // overlapping a big peg (or each other).
+    // Bonus (tiny) pegs: L per gap, between & outside the big pegs on each row.
     const tinies = [];
     const L = state.upg.tinyPegs;
     if (L > 0) {
       const tr = PEG_R * TINY_SCALE;
-      const perRow = 10 * L;
-      const margin = tr + 4;
-      const minGapBig = PEG_R + tr + 3;
       for (let k = 1; k <= R; k++) {
         const y = rowYs[k - 1];
-        const bx = [];
-        for (let j = 0; j < k; j++) bx.push(W / 2 + (j - (k - 1) / 2) * spacing);
-        for (let t = 0; t < perRow; t++) {
-          const x = margin + (perRow === 1 ? 0.5 : t / (perRow - 1)) * (W - 2 * margin);
-          let clash = false;
-          for (const xb of bx) { if (Math.abs(x - xb) < minGapBig) { clash = true; break; } }
-          if (clash) continue;                       // don't intersect big pegs
-          tinies.push({ x, y, r: tr, id: `${k}:${t}` });
-        }
+        const xs = [];
+        for (let j = 0; j < k; j++) xs.push(W / 2 + (j - (k - 1) / 2) * spacing);
+        const regions = [[xs[0] - spacing, xs[0]]];
+        for (let j = 0; j < k - 1; j++) regions.push([xs[j], xs[j + 1]]);
+        regions.push([xs[k - 1], xs[k - 1] + spacing]);
+        regions.forEach((reg, ri) => {
+          for (let t = 0; t < L; t++) {
+            const x = reg[0] + ((t + 1) / (L + 1)) * (reg[1] - reg[0]);
+            if (x < tr + 2 || x > W - tr - 2) continue;
+            tinies.push({ x, y, r: tr, id: `${k}:${ri}:${t}` });
+          }
+        });
       }
     }
 
@@ -404,7 +403,7 @@
       id: 'tinyPegs', name: 'Bonus Pegs', unlockAt: 100, maxLevel: 5,
       level: () => state.upg.tinyPegs,
       cost: () => 100 * Math.pow(2, state.upg.tinyPegs),
-      desc: () => `Adds 10 small bonus pegs per row per level (never overlapping pegs). Green = 1–3g, red = 4–5g; vanish 5s when struck. Lv ${state.upg.tinyPegs}/5.`,
+      desc: () => `Adds small bonus pegs between & beside the pegs. Green = 1–3g, red = 4–5g; vanish 5s when struck. Lv ${state.upg.tinyPegs}/5.`,
       buy() { state.upg.tinyPegs++; },
     },
     {
