@@ -368,13 +368,13 @@
 
   dbgGold.addEventListener('click', () => addGold(100));
   dbgGap.addEventListener('input', () => {
-    const v = Math.max(12, Math.min(100, parseInt(dbgGap.value, 10) || 28));
+    const v = Math.max(12, Math.min(1000, parseInt(dbgGap.value, 10) || 28));
     state.settings.gapToSlot = v;
     dbgGapVal.textContent = v + 'px';
     save();
   });
   dbgEntry.addEventListener('input', () => {
-    const v = Math.max(10, Math.min(100, parseInt(dbgEntry.value, 10) || 12));
+    const v = Math.max(12, Math.min(1000, parseInt(dbgEntry.value, 10) || 12));
     state.settings.entryGap = v;
     dbgEntryVal.textContent = v + 'px';
     save();
