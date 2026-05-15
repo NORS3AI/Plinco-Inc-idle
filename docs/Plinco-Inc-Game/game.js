@@ -16,8 +16,9 @@
 
   const PEG_R = 7;
   const PEG_TOP_Y = 150;
-  const CHAMBER_TOP = 470;
   const FLOOR_Y = H - 30;
+  const CHAMBER_H = 35;                       // ~75% shorter slot
+  const CHAMBER_TOP = FLOOR_Y - CHAMBER_H;
 
   const BALL_R = 8;
   const GRAVITY = 700;
@@ -65,7 +66,8 @@
     const m = chamberMultiplier();
     const n = chamberCount();
     const arr = [];
-    for (let i = 0; i < n; i++) arr.push(m * (1 + Math.abs(i - R)));
+    // Center is worth the most, outer edges the least: 1>2>3<2<1 etc.
+    for (let i = 0; i < n; i++) arr.push(m * ((R + 1) - Math.abs(i - R)));
     return arr;
   }
 
@@ -348,7 +350,6 @@
       vx: (Math.random() - 0.5) * 40,
       vy: 0,
       age: 0,
-      resting: 0,
       done: false,
       mult: t.mult,
       color: t.color,
@@ -408,26 +409,8 @@
       if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * RESTITUTION; }
       if (b.x + BALL_R > W) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * RESTITUTION; }
 
-      if (b.y + BALL_R > CHAMBER_TOP) {
-        for (let i = 1; i < n; i++) {
-          const wx = i * cw;
-          const dx = b.x - wx;
-          if (Math.abs(dx) < BALL_R) {
-            if (dx < 0) { b.x = wx - BALL_R; b.vx = -Math.abs(b.vx) * RESTITUTION; }
-            else        { b.x = wx + BALL_R; b.vx = Math.abs(b.vx) * RESTITUTION; }
-          }
-        }
-      }
-
-      if (b.y + BALL_R >= FLOOR_Y) {
-        b.y = FLOOR_Y - BALL_R;
-        if (b.vy > 50) { b.vy = -b.vy * RESTITUTION; b.vx *= 0.7; }
-        else { b.vy = 0; b.vx *= 0.85; b.resting += dt; }
-      } else {
-        b.resting = 0;
-      }
-
-      if (b.resting > 0.25 && !b.done) {
+      // Score the instant the ball enters the chamber slot
+      if (b.y + BALL_R >= CHAMBER_TOP && !b.done) {
         const idx = Math.min(n - 1, Math.max(0, Math.floor(b.x / cw)));
         let value = values[idx] * b.mult;
         const isCrit = Math.random() < critChance();
@@ -435,7 +418,7 @@
         addGold(value);
         state.floaters.push({
           x: idx * cw + cw / 2,
-          y: CHAMBER_TOP + 16,
+          y: CHAMBER_TOP - 6,
           text: (isCrit ? 'CRIT +' : '+') + fmt(value) + 'g',
           crit: isCrit,
           color: b.color,
@@ -539,8 +522,11 @@
     const n = chamberCount();
     const cw = chamberW();
     const values = chamberValues();
+    ctx.fillStyle = '#1b2038';
+    ctx.fillRect(0, CHAMBER_TOP, W, CHAMBER_H);
     ctx.fillStyle = '#3a4070';
-    for (let i = 1; i < n; i++) ctx.fillRect(i * cw - 1, CHAMBER_TOP, 2, FLOOR_Y - CHAMBER_TOP);
+    ctx.fillRect(0, CHAMBER_TOP, W, 2);
+    for (let i = 1; i < n; i++) ctx.fillRect(i * cw - 1, CHAMBER_TOP, 2, CHAMBER_H);
     ctx.fillRect(0, FLOOR_Y, W, 3);
 
     const R = rowsCount();
@@ -548,12 +534,12 @@
     ctx.font = `bold ${fs}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const cy = FLOOR_Y - 16;
+    const cy = CHAMBER_TOP + CHAMBER_H / 2;
     for (let i = 0; i < n; i++) {
       const cx = i * cw + cw / 2;
       const v = values[i];
-      const ratio = (v / chamberMultiplier() - 1) / R; // 0 center .. 1 edge
-      ctx.fillStyle = ratio < 0.34 ? '#9aa0c8' : ratio < 0.67 ? '#86d6ff' : '#f5c842';
+      const ratio = (v / chamberMultiplier()) / (R + 1); // 1 center .. low edge
+      ctx.fillStyle = ratio > 0.66 ? '#f5c842' : ratio > 0.33 ? '#86d6ff' : '#9aa0c8';
       ctx.fillText(cw >= 34 ? v + 'g' : String(v), cx, cy);
     }
   }
