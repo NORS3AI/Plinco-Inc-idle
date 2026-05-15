@@ -42,7 +42,9 @@
 
   const BALL_R = 8;
   const GRAVITY = 700;
-  const RESTITUTION = 0.55;
+  const RESTITUTION = 0.55;       // normal pegs
+  const DULL_RESTITUTION = 0.18;  // top (first) peg — absorbs most bounce
+  const WALL_RESTITUTION = 0.85;  // side walls — extra bouncy
   const BASE_RECHARGE_S = 3.0;
   const QUEUE_INTERVAL_MS = 1000;
 
@@ -124,7 +126,7 @@
     for (let k = 1; k <= R; k++) {
       const y = startY + (k - 1) * gap;
       for (let j = 0; j < k; j++) {
-        pegs.push({ x: W / 2 + (j - (k - 1) / 2) * spacing, y });
+        pegs.push({ x: W / 2 + (j - (k - 1) / 2) * spacing, y, dull: k === 1 });
       }
     }
 
@@ -540,15 +542,16 @@
           b.y = p.y + ny * md;
           const vn = b.vx * nx + b.vy * ny;
           if (vn < 0) {
-            b.vx -= (1 + RESTITUTION) * vn * nx;
-            b.vy -= (1 + RESTITUTION) * vn * ny;
+            const e = p.dull ? DULL_RESTITUTION : RESTITUTION;
+            b.vx -= (1 + e) * vn * nx;
+            b.vy -= (1 + e) * vn * ny;
           }
           b.vx += (Math.random() - 0.5) * 60;
         }
       }
 
-      if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * RESTITUTION; }
-      if (b.x + BALL_R > W) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * RESTITUTION; }
+      if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * WALL_RESTITUTION; }
+      if (b.x + BALL_R > W) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * WALL_RESTITUTION; }
 
       // Score the instant the ball enters the slot (or if it ever gets stuck)
       if (!b.done && (b.y + BALL_R >= chamberTop || b.age > 14)) {
