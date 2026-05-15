@@ -10,6 +10,14 @@
   const closeBtn = document.getElementById('closeBtn');
   const upgradeList = document.getElementById('upgradeList');
 
+  const voidBtn = document.getElementById('voidBtn');
+  const voidOverlay = document.getElementById('voidOverlay');
+  const voidCloseBtn = document.getElementById('voidCloseBtn');
+  const vpBalance = document.getElementById('vpBalance');
+  const vpList = document.getElementById('vpList');
+  const prestigeBtn = document.getElementById('prestigeBtn');
+  const ffBtn = document.getElementById('ffBtn');
+
   const settingsBtn = document.getElementById('settingsBtn');
   const settingsOverlay = document.getElementById('settingsOverlay');
   const settingsCloseBtn = document.getElementById('settingsCloseBtn');
@@ -104,6 +112,13 @@
     entryGap: 100,
   });
 
+  const defaultVpUpg = () => ({
+    startGold: 0,   // +10g start per level (max 50)
+    earnRate: 0,    // +25% VP per level (max 10)
+    discount: 0,    // prestige req x0.9 per level (max 10)
+    fastFwd: 0,     // 0/1 unlock 2x speed toggle
+  });
+
   const state = {
     gold: 0,
     maxGold: 0,
@@ -113,6 +128,10 @@
     upg: defaultUpg(),
     settings: defaultSettings(),
     seen: {},   // upgrade ids the player has viewed in the menu
+    vp: 0,                       // Void Points (persist through prestige)
+    vpUpg: defaultVpUpg(),       // VP upgrades (persist through prestige)
+    prestigeUnlocked: false,     // sticky once all rows bought
+    fastForward: false,          // transient 2x toggle
   };
 
   // ---- Board geometry (dynamic) ----
@@ -256,6 +275,9 @@
         upg: state.upg,
         settings: state.settings,
         seen: state.seen,
+        vp: state.vp,
+        vpUpg: state.vpUpg,
+        prestigeUnlocked: state.prestigeUnlocked,
       }));
     } catch {}
   }
@@ -268,6 +290,9 @@
       if (s.upg) Object.assign(state.upg, s.upg);
       if (s.settings) Object.assign(state.settings, s.settings);
       if (s.seen) state.seen = s.seen;
+      if (typeof s.vp === 'number') state.vp = s.vp;
+      if (s.vpUpg) Object.assign(state.vpUpg, s.vpUpg);
+      state.prestigeUnlocked = !!s.prestigeUnlocked;
     } catch {}
   }
   load();
@@ -276,6 +301,39 @@
     state.gold += n;
     if (state.gold > state.maxGold) state.maxGold = state.gold;
     save();
+  }
+
+  // ---- Prestige / Void Points ----
+  function startingGold() { return state.vpUpg.startGold * 10; }
+  function reqPerVP() {
+    return Math.max(10000, Math.round(1e6 * Math.pow(0.9, state.vpUpg.discount)));
+  }
+  function vpEarnMult() { return 1 + 0.25 * state.vpUpg.earnRate; }
+  function vpGain() {
+    return Math.floor((state.maxGold / reqPerVP()) * vpEarnMult());
+  }
+  function checkPrestigeUnlock() {
+    if (!state.prestigeUnlocked && state.upg.rows >= ROWS_MAX_LEVEL) {
+      state.prestigeUnlocked = true;
+      save();
+    }
+  }
+  function doPrestige() {
+    const gain = vpGain();
+    if (gain <= 0) return;
+    state.vp += gain;
+    // Full run reset; VP, VP upgrades, settings, prestige flag persist.
+    state.upg = defaultUpg();
+    state.seen = {};
+    state.balls = [];
+    state.floaters = [];
+    state.cooldown = 0;
+    _tinyMeta.clear();
+    state.gold = startingGold();
+    state.maxGold = state.gold;
+    save();
+    renderPanel();
+    renderVpPanel();
   }
 
   // ---- Upgrade definitions ----
@@ -498,6 +556,101 @@
   settingsOverlay.addEventListener('click', (e) => {
     if (e.target === settingsOverlay) closeSettings();
   });
+
+  // ---- Void Points menu ----
+  const VP_UPGRADES = [
+    {
+      id: 'startGold', name: 'Starting Gold', max: 50,
+      level: () => state.vpUpg.startGold,
+      cost: () => 1,
+      desc: () => `Start each run with +10g per level. Now +${fmt(startingGold())}g. Lv ${state.vpUpg.startGold}/50.`,
+      buy() { state.vpUpg.startGold++; },
+    },
+    {
+      id: 'earnRate', name: 'VP Earn Rate', max: 10,
+      level: () => state.vpUpg.earnRate,
+      cost: () => 2 * Math.pow(2, state.vpUpg.earnRate),
+      desc: () => `+25% Void Points per prestige. Now x${vpEarnMult().toFixed(2)}. Lv ${state.vpUpg.earnRate}/10.`,
+      buy() { state.vpUpg.earnRate++; },
+    },
+    {
+      id: 'discount', name: 'Prestige Discount', max: 10,
+      level: () => state.vpUpg.discount,
+      cost: () => 3 * Math.pow(2, state.vpUpg.discount),
+      desc: () => `Gold needed per VP x0.9 per level. Now ${fmt(reqPerVP())}g/VP. Lv ${state.vpUpg.discount}/10.`,
+      buy() { state.vpUpg.discount++; },
+    },
+    {
+      id: 'fastFwd', name: 'Fast Forward', max: 1,
+      level: () => state.vpUpg.fastFwd,
+      cost: () => 10,
+      desc: () => state.vpUpg.fastFwd >= 1
+        ? 'Unlocked: tap "FF" in the top bar for 2x speed.'
+        : 'Unlocks a 2x game-speed toggle in the top bar.',
+      buy() { state.vpUpg.fastFwd = 1; },
+    },
+  ];
+
+  function buyVp(u) {
+    if (u.level() >= u.max || state.vp < u.cost()) return;
+    state.vp -= u.cost();
+    u.buy();
+    save();
+    renderVpPanel();
+  }
+
+  let voidOpen = false;
+  function renderVpPanel() {
+    if (!voidOpen) return;
+    vpBalance.textContent = fmt(state.vp) + ' VP';
+    const gain = vpGain();
+    prestigeBtn.textContent = gain > 0
+      ? `Prestige  (+${fmt(gain)} VP)`
+      : `Prestige  (need ${fmt(reqPerVP())}g)`;
+    prestigeBtn.disabled = gain <= 0;
+    vpList.innerHTML = '';
+    for (const u of VP_UPGRADES) {
+      const lvl = u.level();
+      const maxed = lvl >= u.max;
+      const row = document.createElement('div');
+      row.className = 'upg';
+      const info = document.createElement('div');
+      info.className = 'upg-info';
+      const name = document.createElement('div');
+      name.className = 'upg-name';
+      name.textContent = u.name;
+      const desc = document.createElement('div');
+      desc.className = 'upg-desc';
+      desc.textContent = u.desc();
+      info.appendChild(name); info.appendChild(desc);
+      const btn = document.createElement('button');
+      btn.className = 'buy-btn';
+      if (maxed) { btn.classList.add('maxed'); btn.textContent = u.max === 1 ? 'OWNED' : 'MAX'; btn.disabled = true; }
+      else {
+        btn.textContent = fmt(u.cost()) + ' VP';
+        btn.disabled = state.vp < u.cost();
+        btn.addEventListener('click', () => buyVp(u));
+      }
+      row.appendChild(info); row.appendChild(btn);
+      vpList.appendChild(row);
+    }
+  }
+  function openVoid() { voidOpen = true; voidOverlay.hidden = false; renderVpPanel(); }
+  function closeVoid() { voidOpen = false; voidOverlay.hidden = true; }
+  voidBtn.addEventListener('click', openVoid);
+  voidCloseBtn.addEventListener('click', closeVoid);
+  voidOverlay.addEventListener('click', (e) => { if (e.target === voidOverlay) closeVoid(); });
+  prestigeBtn.addEventListener('click', () => {
+    const gain = vpGain();
+    if (gain <= 0) return;
+    if (!confirm(`Prestige now? Resets gold & all upgrades. You gain ${fmt(gain)} Void Points (kept).`)) return;
+    doPrestige();
+  });
+  ffBtn.addEventListener('click', () => {
+    state.fastForward = !state.fastForward;
+    ffBtn.textContent = state.fastForward ? 'FF x2' : 'FF x1';
+  });
+  setInterval(() => { if (voidOpen) renderVpPanel(); }, 300);
 
   function toggleSetting(key) {
     state.settings[key] = !state.settings[key];
@@ -1044,6 +1197,9 @@
     goldDisplay.textContent = fmt(state.gold) + 'g';
     menuBtn.hidden = state.maxGold < 10;
     if (!menuBtn.hidden) updateMenuBadge();
+    checkPrestigeUnlock();
+    voidBtn.hidden = !state.prestigeUnlocked;
+    ffBtn.hidden = state.vpUpg.fastFwd < 1;
     if (!settingsOverlay.hidden) dbgGoldNow.textContent = fmt(state.gold) + 'g';
   }
 
@@ -1053,7 +1209,8 @@
     const dt = Math.min(0.033, (t - last) / 1000);
     last = t;
     LO = computeLayout();
-    step(dt);
+    const iterations = state.fastForward ? 2 : 1;
+    for (let s = 0; s < iterations; s++) step(dt);
     render();
     syncHud();
     requestAnimationFrame(loop);

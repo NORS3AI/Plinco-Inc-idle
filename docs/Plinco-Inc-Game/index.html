@@ -20,6 +20,8 @@
       <div id="goldDisplay" class="gold-display">0g</div>
       <div class="topbar-btns">
         <button id="menuBtn" class="menu-btn" hidden>Upgrades</button>
+        <button id="voidBtn" class="menu-btn void-btn" hidden>Void</button>
+        <button id="ffBtn" class="menu-btn icon-btn" hidden>FF x1</button>
         <button id="settingsBtn" class="menu-btn icon-btn" aria-label="Settings">&#9881;</button>
       </div>
     </div>
@@ -34,6 +36,24 @@
         <button id="closeBtn" class="close-btn" aria-label="Close">&times;</button>
       </div>
       <div id="upgradeList" class="upgrade-list"></div>
+    </div>
+  </div>
+
+  <div id="voidOverlay" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Void Points</h2>
+        <button id="voidCloseBtn" class="close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div class="upgrade-list">
+        <div class="set-row">
+          <span class="set-label">Void Points</span>
+          <span id="vpBalance" class="set-val">0 VP</span>
+        </div>
+        <button id="prestigeBtn" class="buy-btn danger upgrade-all-btn">Prestige</button>
+        <div class="section-label">VP Upgrades</div>
+        <div id="vpList"></div>
+      </div>
     </div>
   </div>
 
