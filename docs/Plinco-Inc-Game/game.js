@@ -102,11 +102,11 @@
   function chamberValues() {
     const m = chamberMultiplier();
     const n = chamberCount();
-    const mid = (n - 1) / 2;
     const arr = [];
-    // Center is worth the most, outer edges the least: 1 / 1>2>1 / 1>2>3>2>1
+    // 1ch:[1] 2ch:[2,2] 3ch:[3,4,3] 4ch:[4,5,5,4] 5ch:[5,6,7,6,5]
+    // edge = n, +1 per step toward center; x2-upgrade still scales it.
     for (let i = 0; i < n; i++) {
-      arr.push(m * (1 + Math.round(mid - Math.abs(i - mid))));
+      arr.push(m * (n + Math.min(i, n - 1 - i)));
     }
     return arr;
   }
@@ -274,9 +274,9 @@
       buy() { state.upg.queue++; },
     },
     {
-      id: 'rows', name: 'Add Chamber', unlockAt: 450, maxLevel: ROWS_MAX_LEVEL,
+      id: 'rows', name: 'Add Chamber', unlockAt: 1000, maxLevel: ROWS_MAX_LEVEL,
       level: () => state.upg.rows,
-      cost: () => (state.upg.rows === 0 ? 500 : 1000),
+      cost: () => 1000 * Math.pow(10, state.upg.rows),
       desc: () => `Board: ${chamberCount()} chamber${chamberCount() === 1 ? '' : 's'}. +1 chamber & peg row (max 5).`,
       buy() { state.upg.rows++; },
     },
