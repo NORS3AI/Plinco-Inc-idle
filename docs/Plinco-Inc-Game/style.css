@@ -73,6 +73,14 @@ h1 {
 }
 .menu-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #a87510; }
 
+.badge-buy, .badge-new {
+  font-weight: 900;
+  font-size: 15px;
+  vertical-align: baseline;
+}
+.badge-buy { color: #1f8a3b; }
+.badge-new { color: #d52525; }
+
 .overlay {
   position: fixed;
   inset: 0;

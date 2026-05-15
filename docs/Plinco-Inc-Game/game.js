@@ -62,8 +62,9 @@
     crit: 0,
     recharge: 0,
     queue: 0,
-    rows: 0,        // 0..4  -> chambers = 1 + rows  (max 5)
+    rows: 0,        // 0..4  -> rows = 2 + rows  (board 2..6)
     movers: 0,      // 0..5  -> moving bars between rows
+    randomDrop: 0,  // 0/1   -> random "rain" drop instead of dead center
     autoDrop: 0,
     ballGold: 0,
     ballGreen: 0,
@@ -92,10 +93,11 @@
     queueTimer: 0,
     upg: defaultUpg(),
     settings: defaultSettings(),
+    seen: {},   // upgrade ids the player has viewed in the menu
   };
 
   // ---- Board geometry (dynamic) ----
-  function chamberCount() { return Math.min(5, 1 + state.upg.rows); }  // 1..5
+  function chamberCount() { return Math.min(6, 2 + state.upg.rows); }  // 2..6 (rows 1&2 free)
   function rowsCount()    { return chamberCount(); }                   // peg rows = chambers
   function chamberW()     { return W / chamberCount(); }
 
@@ -199,7 +201,7 @@
   function cooldownMs() { return rechargeSeconds() * 1000; }
 
   const QUEUE_MAX_LEVEL = 10;
-  const ROWS_MAX_LEVEL = 4; // chambers 1..5
+  const ROWS_MAX_LEVEL = 4; // adds rows 3..6 (board 2..6)
 
   // ---- Persistence ----
   const SAVE_KEY = 'plinco-inc-save-v1';
@@ -210,6 +212,7 @@
         maxGold: state.maxGold,
         upg: state.upg,
         settings: state.settings,
+        seen: state.seen,
       }));
     } catch {}
   }
@@ -221,6 +224,7 @@
       state.maxGold = typeof s.maxGold === 'number' ? s.maxGold : state.gold;
       if (s.upg) Object.assign(state.upg, s.upg);
       if (s.settings) Object.assign(state.settings, s.settings);
+      if (s.seen) state.seen = s.seen;
     } catch {}
   }
   load();
@@ -286,10 +290,18 @@
       buy() { state.upg.queue++; },
     },
     {
-      id: 'rows', name: 'Add Chamber', unlockAt: 1000, maxLevel: ROWS_MAX_LEVEL,
+      id: 'randomDrop', name: 'Random Rain Drop', unlockAt: 500, maxLevel: 1,
+      level: () => state.upg.randomDrop, cost: () => 500,
+      desc: () => state.upg.randomDrop >= 1
+        ? 'Balls rain from random spots across the top.'
+        : 'Balls drop from a random spot across the top instead of dead center.',
+      buy() { state.upg.randomDrop = 1; },
+    },
+    {
+      id: 'rows', name: 'Add Row', unlockAt: 1000, maxLevel: ROWS_MAX_LEVEL,
       level: () => state.upg.rows,
       cost: () => 1000 * Math.pow(10, state.upg.rows),
-      desc: () => `Board: ${chamberCount()} chamber${chamberCount() === 1 ? '' : 's'}. +1 chamber & peg row (max 5).`,
+      desc: () => `Board: ${chamberCount()} rows. Adds row ${chamberCount() + 1} (+1 chamber, max 6 rows).`,
       buy() { state.upg.rows++; },
     },
     {
@@ -298,8 +310,7 @@
       cost: () => [1000, 10000, 100000, 1000000, 1000000000][state.upg.movers],
       desc: () => {
         const next = state.upg.movers + 1;
-        const where = next < 5 ? `between rows ${next} and ${next + 1}` : 'after the last row';
-        return `Bar ${next}/5: a short bar ${where} that slides back & forth — balls bounce off it. Each moves on its own for chaos.`;
+        return `Bar ${next}/5: a short bar between rows ${next} and ${next + 1} that slides back & forth — balls bounce off it. Each moves on its own for chaos.`;
       },
       buy() { state.upg.movers++; },
     },
@@ -325,7 +336,32 @@
 
   // ---- Menu DOM ----
   let panelOpen = false;
-  function openPanel() { panelOpen = true; overlay.hidden = false; renderPanel(); }
+
+  function visibleUpgrades() {
+    return UPGRADES.filter(u => state.maxGold >= u.unlockAt && u.level() < u.maxLevel);
+  }
+  function markSeen() {
+    let changed = false;
+    for (const u of visibleUpgrades()) {
+      if (!state.seen[u.id]) { state.seen[u.id] = true; changed = true; }
+    }
+    if (changed) save();
+  }
+  let lastBadge = null;
+  function updateMenuBadge() {
+    const vis = visibleUpgrades();
+    const hasNew = vis.some(u => !state.seen[u.id]);
+    const canBuy = vis.some(u => state.gold >= u.cost());
+    let html = 'Upgrades';
+    if (canBuy) html += ' <span class="badge-buy">!</span>';
+    if (hasNew) html += ' <span class="badge-new">!!</span>';
+    if (html !== lastBadge) { menuBtn.innerHTML = html; lastBadge = html; }
+  }
+
+  function openPanel() {
+    panelOpen = true; overlay.hidden = false;
+    renderPanel(); markSeen();
+  }
   function closePanel() { panelOpen = false; overlay.hidden = true; }
   menuBtn.addEventListener('click', openPanel);
   closeBtn.addEventListener('click', closePanel);
@@ -436,8 +472,7 @@
   function renderPanel() {
     if (!panelOpen) return;
     upgradeList.innerHTML = '';
-    const visible = UPGRADES.filter(u =>
-      state.maxGold >= u.unlockAt && u.level() < u.maxLevel);
+    const visible = visibleUpgrades();
     if (visible.length === 0) {
       const p = document.createElement('div');
       p.className = 'upg-desc';
@@ -517,10 +552,12 @@
 
   function dropBall() {
     const t = rollBall();
+    const rain = state.upg.randomDrop >= 1;
     state.balls.push({
-      x: BALL_R + Math.random() * (W - 2 * BALL_R),  // random "rain" across the top
+      x: rain ? BALL_R + Math.random() * (W - 2 * BALL_R)   // random "rain"
+              : COIN.x + (Math.random() - 0.5) * 1.5,        // dead center
       y: SPAWN_Y,
-      vx: (Math.random() - 0.5) * 40,
+      vx: rain ? (Math.random() - 0.5) * 40 : (Math.random() - 0.5) * 8,
       vy: 0,
       age: 0,
       done: false,
@@ -535,14 +572,8 @@
     if (!LO) return [];
     const ys = LO.rowYs, R = ys.length, owned = state.upg.movers, list = [];
     for (let m = 1; m <= owned && m <= 5; m++) {
-      let y;
-      if (m <= 4) {
-        if (R < m + 1) continue;          // need both rows present
-        y = (ys[m - 1] + ys[m]) / 2;
-      } else {
-        if (R < 5) continue;              // 5th bar sits after the last row
-        y = (ys[4] + LO.chamberTop) / 2;
-      }
+      if (R < m + 1) continue;            // bar m sits between row m and row m+1
+      const y = (ys[m - 1] + ys[m]) / 2;
       list.push({ y, mv: movers[m - 1] });
     }
     return list;
@@ -832,6 +863,7 @@
   function syncHud() {
     goldDisplay.textContent = fmt(state.gold) + 'g';
     menuBtn.hidden = state.maxGold < 10;
+    if (!menuBtn.hidden) updateMenuBadge();
     if (!settingsOverlay.hidden) dbgGoldNow.textContent = fmt(state.gold) + 'g';
   }
 
