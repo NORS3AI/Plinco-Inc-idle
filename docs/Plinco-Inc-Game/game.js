@@ -86,8 +86,8 @@
   };
 
   // ---- Board geometry (dynamic) ----
-  function rowsCount()    { return Math.min(5, 2 + state.upg.rows); } // 2..5
-  function chamberCount() { return 2 * rowsCount() + 1; }      // 5..11
+  function chamberCount() { return Math.min(5, 1 + state.upg.rows); }  // 1..5
+  function rowsCount()    { return chamberCount(); }                   // peg rows = chambers
   function chamberW()     { return W / chamberCount(); }
 
   function chamberMultiplier() { return Math.pow(2, state.upg.chamberValue); }
@@ -100,12 +100,14 @@
   }
 
   function chamberValues() {
-    const R = rowsCount();
     const m = chamberMultiplier();
     const n = chamberCount();
+    const mid = (n - 1) / 2;
     const arr = [];
-    // Center is worth the most, outer edges the least: 1>2>3<2<1 etc.
-    for (let i = 0; i < n; i++) arr.push(m * ((R + 1) - Math.abs(i - R)));
+    // Center is worth the most, outer edges the least: 1 / 1>2>1 / 1>2>3>2>1
+    for (let i = 0; i < n; i++) {
+      arr.push(m * (1 + Math.round(mid - Math.abs(i - mid))));
+    }
     return arr;
   }
 
@@ -115,7 +117,7 @@
   function computeLayout() {
     const R = rowsCount();
     const cw = chamberW();
-    const spacing = 2.5 * cw;
+    const spacing = (W * 0.72) / Math.max(1, R - 1); // spread the pyramid across the board
     const gapToSlot = state.settings.gapToSlot;
     const startY = SPAWN_Y + state.settings.entryGap;
     const tail = gapToSlot + CHAMBER_H;
@@ -185,7 +187,7 @@
   function cooldownMs() { return rechargeSeconds() * 1000; }
 
   const QUEUE_MAX_LEVEL = 10;
-  const ROWS_MAX_LEVEL = 3; // board rows 2..5
+  const ROWS_MAX_LEVEL = 4; // chambers 1..5
 
   // ---- Persistence ----
   const SAVE_KEY = 'plinco-inc-save-v1';
@@ -272,13 +274,10 @@
       buy() { state.upg.queue++; },
     },
     {
-      id: 'rows', name: 'Add Row', unlockAt: 450, maxLevel: ROWS_MAX_LEVEL,
+      id: 'rows', name: 'Add Chamber', unlockAt: 450, maxLevel: ROWS_MAX_LEVEL,
       level: () => state.upg.rows,
       cost: () => (state.upg.rows === 0 ? 500 : 1000),
-      desc: () => {
-        const R = rowsCount();
-        return `Board: ${R} rows / ${chamberCount()} chambers. +1 row, +2 chambers (max 5 rows).`;
-      },
+      desc: () => `Board: ${chamberCount()} chamber${chamberCount() === 1 ? '' : 's'}. +1 chamber & peg row (max 5).`,
       buy() { state.upg.rows++; },
     },
     {
@@ -670,7 +669,7 @@
     for (let i = 1; i < n; i++) ctx.fillRect(i * cw - 1, chamberTop, 2, CHAMBER_H);
     ctx.fillRect(0, floorY, W, 3);
 
-    const R = rowsCount();
+    const maxBase = Math.max(...values) / chamberMultiplier();
     const fs = Math.max(7, Math.min(13, Math.round(cw * 0.42)));
     ctx.font = `bold ${fs}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
@@ -679,7 +678,7 @@
     for (let i = 0; i < n; i++) {
       const cx = i * cw + cw / 2;
       const v = values[i];
-      const ratio = (v / chamberMultiplier()) / (R + 1); // 1 center .. low edge
+      const ratio = (v / chamberMultiplier()) / maxBase; // 1 center .. low edge
       ctx.fillStyle = ratio > 0.66 ? '#f5c842' : ratio > 0.33 ? '#86d6ff' : '#9aa0c8';
       ctx.fillText(cw >= 34 ? v + 'g' : String(v), cx, cy);
     }
