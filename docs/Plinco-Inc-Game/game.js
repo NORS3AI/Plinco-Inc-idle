@@ -69,8 +69,8 @@
     music: true,
     fx: true,
     mute: false,
-    gapToSlot: 28,
-    entryGap: 12,
+    gapToSlot: 125,
+    entryGap: 100,
   });
 
   const state = {
@@ -382,13 +382,13 @@
   dbgGold1k.addEventListener('click', () => debugAddGold(1000));
   dbgGold10k.addEventListener('click', () => debugAddGold(10000));
   dbgGap.addEventListener('input', () => {
-    const v = Math.max(12, Math.min(1000, parseInt(dbgGap.value, 10) || 28));
+    const v = Math.max(12, Math.min(1000, parseInt(dbgGap.value, 10) || 125));
     state.settings.gapToSlot = v;
     dbgGapVal.textContent = v + 'px';
     save();
   });
   dbgEntry.addEventListener('input', () => {
-    const v = Math.max(12, Math.min(1000, parseInt(dbgEntry.value, 10) || 12));
+    const v = Math.max(12, Math.min(1000, parseInt(dbgEntry.value, 10) || 100));
     state.settings.entryGap = v;
     dbgEntryVal.textContent = v + 'px';
     save();
