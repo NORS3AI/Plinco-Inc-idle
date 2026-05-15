@@ -16,7 +16,11 @@
   const setMusic = document.getElementById('setMusic');
   const setFx = document.getElementById('setFx');
   const setMute = document.getElementById('setMute');
-  const dbgGold = document.getElementById('dbgGold');
+  const dbgGoldNow = document.getElementById('dbgGoldNow');
+  const dbgGold100 = document.getElementById('dbgGold100');
+  const dbgGold500 = document.getElementById('dbgGold500');
+  const dbgGold1k = document.getElementById('dbgGold1k');
+  const dbgGold10k = document.getElementById('dbgGold10k');
   const dbgGap = document.getElementById('dbgGap');
   const dbgGapVal = document.getElementById('dbgGapVal');
   const dbgEntry = document.getElementById('dbgEntry');
@@ -344,6 +348,7 @@
     dbgGapVal.textContent = state.settings.gapToSlot + 'px';
     dbgEntry.value = String(state.settings.entryGap);
     dbgEntryVal.textContent = state.settings.entryGap + 'px';
+    dbgGoldNow.textContent = fmt(state.gold) + 'g';
   }
   function openSettings() {
     settingsOverlay.hidden = false;
@@ -366,7 +371,14 @@
   setFx.addEventListener('click', () => toggleSetting('fx'));
   setMute.addEventListener('click', () => toggleSetting('mute'));
 
-  dbgGold.addEventListener('click', () => addGold(100));
+  function debugAddGold(n) {
+    addGold(n);
+    dbgGoldNow.textContent = fmt(state.gold) + 'g';
+  }
+  dbgGold100.addEventListener('click', () => debugAddGold(100));
+  dbgGold500.addEventListener('click', () => debugAddGold(500));
+  dbgGold1k.addEventListener('click', () => debugAddGold(1000));
+  dbgGold10k.addEventListener('click', () => debugAddGold(10000));
   dbgGap.addEventListener('input', () => {
     const v = Math.max(12, Math.min(1000, parseInt(dbgGap.value, 10) || 28));
     state.settings.gapToSlot = v;
@@ -723,6 +735,7 @@
   function syncHud() {
     goldDisplay.textContent = fmt(state.gold) + 'g';
     menuBtn.hidden = state.maxGold < 10;
+    if (!settingsOverlay.hidden) dbgGoldNow.textContent = fmt(state.gold) + 'g';
   }
 
   let last = 0;

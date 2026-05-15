@@ -270,6 +270,13 @@ h1 {
   cursor: pointer;
 }
 
+.dbg-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dbg-btns .buy-btn { flex: 1; min-width: 64px; }
+
 canvas {
   display: block;
   margin: 0 auto;
