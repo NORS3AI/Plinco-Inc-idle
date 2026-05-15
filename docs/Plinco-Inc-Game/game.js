@@ -588,14 +588,32 @@
     }
   });
 
+  // Distinct peg columns across all visible rows (deduped).
+  function pegColumns() {
+    const xs = [], seen = new Set();
+    if (LO && LO.pegs) {
+      for (const p of LO.pegs) {
+        const k = Math.round(p.x);
+        if (!seen.has(k)) { seen.add(k); xs.push(p.x); }
+      }
+    }
+    return xs;
+  }
+
   function dropBall() {
     const t = rollBall();
     const rain = state.upg.randomDrop >= 1;
+    let x;
+    if (rain) {
+      const cols = pegColumns();                    // line up over a random peg
+      x = cols.length ? cols[(Math.random() * cols.length) | 0] : COIN.x;
+    } else {
+      x = COIN.x + (Math.random() - 0.5) * 1.5;      // dead center
+    }
     state.balls.push({
-      x: rain ? BALL_R + Math.random() * (W - 2 * BALL_R)   // random "rain"
-              : COIN.x + (Math.random() - 0.5) * 1.5,        // dead center
+      x,
       y: SPAWN_Y,
-      vx: rain ? (Math.random() - 0.5) * 40 : (Math.random() - 0.5) * 8,
+      vx: rain ? (Math.random() - 0.5) * 6 : (Math.random() - 0.5) * 8,
       vy: 0,
       age: 0,
       done: false,
@@ -744,6 +762,32 @@
           life: 0,
         });
         b.done = true;
+      }
+    }
+
+    // Ball-to-ball collisions (equal mass, springy).
+    const bs = state.balls;
+    const minD = 2 * BALL_R;
+    for (let i = 0; i < bs.length; i++) {
+      const a = bs[i];
+      if (a.done) continue;
+      for (let j = i + 1; j < bs.length; j++) {
+        const c = bs[j];
+        if (c.done) continue;
+        const dx = c.x - a.x, dy = c.y - a.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= minD * minD || d2 < 0.0001) continue;
+        const d = Math.sqrt(d2);
+        const nx = dx / d, ny = dy / d;
+        const overlap = (minD - d) / 2;
+        a.x -= nx * overlap; a.y -= ny * overlap;
+        c.x += nx * overlap; c.y += ny * overlap;
+        const rvn = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
+        if (rvn < 0) {
+          const imp = -(1 + 0.9) * rvn / 2;     // equal mass, e=0.9
+          a.vx -= imp * nx; a.vy -= imp * ny;
+          c.vx += imp * nx; c.vy += imp * ny;
+        }
       }
     }
 
