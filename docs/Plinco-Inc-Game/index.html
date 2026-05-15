@@ -10,9 +10,26 @@
   <main class="wrap">
     <h1>Plinco Inc.</h1>
     <p class="sub">Tap the coin. Drop the ball. Get paid.</p>
+
+    <div class="topbar">
+      <div id="goldDisplay" class="gold-display">0g</div>
+      <button id="menuBtn" class="menu-btn" hidden>Upgrades</button>
+    </div>
+
     <canvas id="game" width="400" height="640" aria-label="Plinko game board"></canvas>
-    <p class="hint">Outer chambers pay more. Center pays less. 3-second recharge per drop.</p>
+    <p class="hint">Outer chambers pay more. Center pays less.</p>
   </main>
+
+  <div id="overlay" class="overlay" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Upgrades</h2>
+        <button id="closeBtn" class="close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div id="upgradeList" class="upgrade-list"></div>
+    </div>
+  </div>
+
   <script src="game.js"></script>
 </body>
 </html>
