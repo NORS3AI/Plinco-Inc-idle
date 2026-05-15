@@ -15,10 +15,13 @@
   const BAR  = { x: (W - 200) / 2, y: COIN.y + COIN.r + 18, w: 200, h: 10 };
 
   const PEG_R = 7;
-  const PEG_TOP_Y = 150;
-  const FLOOR_Y = H - 30;
-  const CHAMBER_H = 35;                       // ~75% shorter slot
-  const CHAMBER_TOP = FLOOR_Y - CHAMBER_H;
+  const CONTENT_TOP = 150;       // first peg row never goes above this
+  const CONTENT_BOTTOM = H - 14; // floor never goes below this
+  const CHAMBER_H = 35;          // short slot
+  const GAP_TO_SLOT = 28;        // distance from last peg row to slot
+  const PREFERRED_GAP = 78;      // ideal vertical spacing between peg rows
+
+  let LO = null;                 // current frame's board layout
 
   const BALL_R = 8;
   const GRAVITY = 700;
@@ -71,22 +74,49 @@
     return arr;
   }
 
-  function pegList() {
+  // Lay out the peg rows + slot. The slot always sits GAP_TO_SLOT below the
+  // last peg row, whatever the row count. Compact boards are centered in the
+  // available space; tall boards compress to fit.
+  function computeLayout() {
     const R = rowsCount();
     const cw = chamberW();
     const spacing = 2 * cw;
-    const topY = PEG_TOP_Y;
-    const botY = CHAMBER_TOP - 30;                       // bottom row sits just above the slot
-    const gap = R > 1 ? Math.min(110, (botY - topY) / (R - 1)) : 0;
+    const avail = CONTENT_BOTTOM - CONTENT_TOP;
+    const tail = GAP_TO_SLOT + CHAMBER_H;
+
+    let gap, startY;
+    if (R > 1) {
+      const neededPref = (R - 1) * PREFERRED_GAP + tail;
+      if (neededPref <= avail) {
+        gap = PREFERRED_GAP;
+        startY = CONTENT_TOP + (avail - neededPref) / 2;
+      } else {
+        gap = (avail - tail) / (R - 1);
+        startY = CONTENT_TOP;
+      }
+    } else {
+      gap = 0;
+      startY = CONTENT_TOP + (avail - tail) / 2;
+    }
+
     const pegs = [];
     for (let k = 1; k <= R; k++) {
-      const y = botY - (R - k) * gap;                    // anchor from the bottom up
+      const y = startY + (k - 1) * gap;
       for (let j = 0; j < k; j++) {
-        const x = W / 2 + (j - (k - 1) / 2) * spacing;
-        pegs.push({ x, y });
+        pegs.push({ x: W / 2 + (j - (k - 1) / 2) * spacing, y });
       }
     }
-    return pegs;
+
+    const lastRowY = startY + (R - 1) * gap;
+    const chamberTop = lastRowY + GAP_TO_SLOT;
+    return {
+      pegs,
+      chamberTop,
+      floorY: chamberTop + CHAMBER_H,
+      cw,
+      n: chamberCount(),
+      values: chamberValues(),
+    };
   }
 
   // ---- Colored balls (independent rolls, highest tier wins) ----
@@ -376,10 +406,7 @@
       state.queueTimer = 0;
     }
 
-    const pegs = pegList();
-    const values = chamberValues();
-    const n = chamberCount();
-    const cw = chamberW();
+    const { pegs, values, n, cw, chamberTop } = LO;
 
     for (const b of state.balls) {
       if (b.done) continue;
@@ -410,7 +437,7 @@
       if (b.x + BALL_R > W) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * RESTITUTION; }
 
       // Score the instant the ball enters the slot (or if it ever gets stuck)
-      if (!b.done && (b.y + BALL_R >= CHAMBER_TOP || b.age > 14)) {
+      if (!b.done && (b.y + BALL_R >= chamberTop || b.age > 14)) {
         const idx = Math.min(n - 1, Math.max(0, Math.floor(b.x / cw)));
         let value = values[idx] * b.mult;
         const isCrit = Math.random() < critChance();
@@ -418,7 +445,7 @@
         addGold(value);
         state.floaters.push({
           x: idx * cw + cw / 2,
-          y: CHAMBER_TOP - 6,
+          y: chamberTop - 6,
           text: (isCrit ? 'CRIT +' : '+') + fmt(value) + 'g',
           crit: isCrit,
           color: b.color,
@@ -506,7 +533,7 @@
   }
 
   function drawBoard() {
-    const pegs = pegList();
+    const { pegs, n, cw, values, chamberTop, floorY } = LO;
     for (const p of pegs) {
       const g = ctx.createRadialGradient(p.x - 2, p.y - 2, 1, p.x, p.y, PEG_R);
       g.addColorStop(0, '#ffffff');
@@ -517,22 +544,19 @@
       ctx.lineWidth = 1; ctx.stroke();
     }
 
-    const n = chamberCount();
-    const cw = chamberW();
-    const values = chamberValues();
     ctx.fillStyle = '#1b2038';
-    ctx.fillRect(0, CHAMBER_TOP, W, CHAMBER_H);
+    ctx.fillRect(0, chamberTop, W, CHAMBER_H);
     ctx.fillStyle = '#3a4070';
-    ctx.fillRect(0, CHAMBER_TOP, W, 2);
-    for (let i = 1; i < n; i++) ctx.fillRect(i * cw - 1, CHAMBER_TOP, 2, CHAMBER_H);
-    ctx.fillRect(0, FLOOR_Y, W, 3);
+    ctx.fillRect(0, chamberTop, W, 2);
+    for (let i = 1; i < n; i++) ctx.fillRect(i * cw - 1, chamberTop, 2, CHAMBER_H);
+    ctx.fillRect(0, floorY, W, 3);
 
     const R = rowsCount();
     const fs = Math.max(7, Math.min(13, Math.round(cw * 0.42)));
     ctx.font = `bold ${fs}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const cy = CHAMBER_TOP + CHAMBER_H / 2;
+    const cy = chamberTop + CHAMBER_H / 2;
     for (let i = 0; i < n; i++) {
       const cx = i * cw + cw / 2;
       const v = values[i];
@@ -603,6 +627,7 @@
     if (!last) last = t;
     const dt = Math.min(0.033, (t - last) / 1000);
     last = t;
+    LO = computeLayout();
     step(dt);
     render();
     syncHud();
