@@ -285,6 +285,16 @@ h1 {
 }
 .buy-btn.danger:active { box-shadow: 0 1px 0 #8c1f15; }
 
+.upgrade-all-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  background: linear-gradient(180deg, #8ad7ff, #3a8dff);
+  color: #06203a;
+  box-shadow: 0 3px 0 #1f4f8c;
+}
+.upgrade-all-btn:active { box-shadow: 0 1px 0 #1f4f8c; }
+
 .dbg-btns {
   display: flex;
   gap: 8px;

@@ -84,6 +84,7 @@
     tinyPegs: 0,    // 0..5  -> bonus pegs per gap
     movers: 0,      // 0..5  -> moving bars between rows
     randomDrop: 0,  // 0/1   -> random "rain" drop instead of dead center
+    upgradeAll: 0,  // 0/1   -> unlocks the Upgrade All button
     autoDrop: 0,
     ballGold: 0,
     ballGreen: 0,
@@ -311,7 +312,7 @@
       buy() { state.upg.chamberValue++; },
     },
     {
-      id: 'crit', name: 'Critical Chance', unlockAt: 30, maxLevel: Infinity,
+      id: 'crit', name: 'Critical Chance', unlockAt: 30, maxLevel: 1000,
       level: () => state.upg.crit, cost: () => critCost(state.upg.crit),
       desc: () => `+1% crit chance per level (crit = +10% payout). Now: ${state.upg.crit}%.`,
       buy() { state.upg.crit++; },
@@ -363,6 +364,12 @@
       buy() { state.upg.autoDrop = 1; },
     },
     ...BALL_TIERS.map(ballUpg),
+    {
+      id: 'upgradeAll', name: 'Upgrade All', unlockAt: 1000000, maxLevel: 1,
+      level: () => state.upg.upgradeAll, cost: () => 1000000,
+      desc: () => 'Unlocks an "Upgrade All" button at the top of this menu that spends all your gold buying upgrades.',
+      buy() { state.upg.upgradeAll = 1; },
+    },
   ];
 
   function canBuy(u) { return u.level() < u.maxLevel && state.gold >= u.cost(); }
@@ -370,6 +377,26 @@
     if (!canBuy(u)) return;
     state.gold -= u.cost();
     u.buy();
+    save();
+    renderPanel();
+  }
+
+  // Spend all gold: repeatedly buy the cheapest affordable unlocked upgrade.
+  function doUpgradeAll() {
+    let guard = 200000;
+    while (guard-- > 0) {
+      let best = null;
+      for (const u of UPGRADES) {
+        if (u.id === 'upgradeAll') continue;
+        if (u.level() >= u.maxLevel) continue;
+        if (state.maxGold < u.unlockAt) continue;
+        const c = u.cost();
+        if (state.gold >= c && (best === null || c < best.c)) best = { u, c };
+      }
+      if (!best) break;
+      state.gold -= best.c;
+      best.u.buy();
+    }
     save();
     renderPanel();
   }
@@ -512,6 +539,15 @@
   function renderPanel() {
     if (!panelOpen) return;
     upgradeList.innerHTML = '';
+
+    if (state.upg.upgradeAll >= 1) {
+      const allBtn = document.createElement('button');
+      allBtn.className = 'buy-btn upgrade-all-btn';
+      allBtn.textContent = 'Upgrade All (spend all gold)';
+      allBtn.addEventListener('click', doUpgradeAll);
+      upgradeList.appendChild(allBtn);
+    }
+
     const visible = visibleUpgrades();
     if (visible.length === 0) {
       const p = document.createElement('div');
