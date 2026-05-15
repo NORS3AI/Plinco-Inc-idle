@@ -25,6 +25,7 @@
   const dbgGapVal = document.getElementById('dbgGapVal');
   const dbgEntry = document.getElementById('dbgEntry');
   const dbgEntryVal = document.getElementById('dbgEntryVal');
+  const dbgReset = document.getElementById('dbgReset');
 
   // ---- Layout ----
   const COIN = { x: W / 2, y: 64, r: 30 };
@@ -391,6 +392,11 @@
     state.settings.entryGap = v;
     dbgEntryVal.textContent = v + 'px';
     save();
+  });
+  dbgReset.addEventListener('click', () => {
+    if (!confirm('Delete your game and start completely over? This cannot be undone.')) return;
+    try { localStorage.removeItem(SAVE_KEY); } catch {}
+    location.reload();
   });
 
   const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc',

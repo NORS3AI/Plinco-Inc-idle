@@ -270,6 +270,13 @@ h1 {
   cursor: pointer;
 }
 
+.buy-btn.danger {
+  background: linear-gradient(180deg, #ff7a6b, #e23b2b);
+  color: #fff;
+  box-shadow: 0 3px 0 #8c1f15;
+}
+.buy-btn.danger:active { box-shadow: 0 1px 0 #8c1f15; }
+
 .dbg-btns {
   display: flex;
   gap: 8px;
