@@ -40,6 +40,7 @@
   // gap from last peg row to the slot — tunable via Debug settings for now
 
   let LO = null;                 // current frame's board layout
+  let gravityLowUntil = 0;       // half-gravity window after a bar strike
 
   const BALL_R = 8;
   const GRAVITY = 700;
@@ -349,7 +350,7 @@
       cost: () => [1000, 10000, 100000, 1000000, 1000000000][state.upg.movers],
       desc: () => {
         const next = state.upg.movers + 1;
-        return `${next} moving bar${next === 1 ? '' : 's'} (lv ${next}/5): short bars that slide across the board — balls bounce off them. Each moves on its own at its own speed.`;
+        return `Bar ${next}/5 between rows ${next} & ${next + 1}: slides across, balls bounce off it & gravity halves for 3s. Each bar moves on its own.`;
       },
       buy() { state.upg.movers++; },
     },
@@ -604,18 +605,16 @@
     sfx('drop');
   }
 
-  // Upgrade level = number of bars. They sit at evenly-spaced, distinct
-  // heights across the peg field so they never intersect each other.
+  // Bar m sits between peg row m and row m+1 (upgrade 1 -> rows 1&2, etc.).
+  // Distinct rows => distinct heights, so bars never intersect.
   function moverList() {
     if (!LO) return [];
+    const ys = LO.rowYs, R = ys.length;
     const owned = Math.min(5, state.upg.movers);
-    if (owned <= 0) return [];
-    const top = LO.rowYs[0] + 22;             // just below the first row
-    const bot = LO.chamberTop - 16;           // just above the chamber slot
     const list = [];
-    for (let i = 0; i < owned; i++) {
-      const y = top + ((i + 1) / (owned + 1)) * (bot - top);
-      list.push({ y, mv: movers[i] });
+    for (let m = 1; m <= owned; m++) {
+      if (R < m + 1) continue;                 // needs both rows present
+      list.push({ y: (ys[m - 1] + ys[m]) / 2, mv: movers[m - 1] });
     }
     return list;
   }
@@ -647,11 +646,12 @@
 
     const { pegs, tinies, values, n, cw, chamberTop } = LO;
     const now = performance.now();
+    const grav = now < gravityLowUntil ? GRAVITY * 0.5 : GRAVITY;
 
     for (const b of state.balls) {
       if (b.done) continue;
       b.age += dt;
-      b.vy += GRAVITY * dt;
+      b.vy += grav * dt;
       b.x  += b.vx * dt;
       b.y  += b.vy * dt;
 
@@ -720,6 +720,7 @@
             b.vy -= 1.9 * vn * ny;
           }
           b.vx += am.mv.vx * 0.35 + (Math.random() - 0.5) * 110;
+          gravityLowUntil = now + 3000;        // half gravity for 3s
         }
       }
 
