@@ -62,7 +62,14 @@
   function chamberCount() { return 2 * rowsCount() + 1; }      // 5..21
   function chamberW()     { return W / chamberCount(); }
 
-  function chamberMultiplier() { return state.upg.chamberValue >= 1 ? 2 : 1; }
+  function chamberMultiplier() { return Math.pow(2, state.upg.chamberValue); }
+  function chamberValueCost(level) {
+    if (level === 0) return 10;
+    if (level === 1) return 50;
+    if (level === 2) return 150;
+    if (level === 3) return 300;
+    return 300 * Math.pow(2, level - 3);
+  }
 
   function chamberValues() {
     const R = rowsCount();
@@ -222,12 +229,11 @@
 
   const UPGRADES = [
     {
-      id: 'chamberValue', name: 'Chamber Value x2', unlockAt: 10, maxLevel: 1,
-      level: () => state.upg.chamberValue, cost: () => 10,
-      desc: () => state.upg.chamberValue >= 1
-        ? 'Chamber payouts doubled.'
-        : 'Double every chamber payout (e.g. 1/2/3 → 2/4/6).',
-      buy() { state.upg.chamberValue = 1; },
+      id: 'chamberValue', name: 'Chamber Value x2', unlockAt: 10, maxLevel: 50,
+      level: () => state.upg.chamberValue,
+      cost: () => chamberValueCost(state.upg.chamberValue),
+      desc: () => `Doubles every chamber payout (compounding). Now x${fmt(chamberMultiplier())}.`,
+      buy() { state.upg.chamberValue++; },
     },
     {
       id: 'crit', name: 'Critical Chance', unlockAt: 30, maxLevel: Infinity,
