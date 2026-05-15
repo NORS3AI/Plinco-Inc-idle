@@ -15,20 +15,8 @@
   const BAR  = { x: (W - 200) / 2, y: COIN.y + COIN.r + 18, w: 200, h: 10 };
 
   const PEG_R = 7;
-  const ROW1_Y = 230;
-  const ROW2_Y = 330;
-  const PEG_SPACING = 70;
-
-  const PEGS = [
-    { x: W / 2,               y: ROW1_Y },
-    { x: W / 2 - PEG_SPACING, y: ROW2_Y },
-    { x: W / 2 + PEG_SPACING, y: ROW2_Y },
-  ];
-
-  const CHAMBER_COUNT = 5;
-  const BASE_CHAMBER_VALUES = [3, 2, 1, 2, 3];
-  const CHAMBER_W = W / CHAMBER_COUNT;
-  const CHAMBER_TOP = 430;
+  const PEG_TOP_Y = 150;
+  const CHAMBER_TOP = 470;
   const FLOOR_Y = H - 30;
 
   const BALL_R = 8;
@@ -38,7 +26,23 @@
   const QUEUE_INTERVAL_MS = 1000;
 
   // ---- State ----
-  const defaultState = () => ({
+  const defaultUpg = () => ({
+    chamberValue: 0,
+    crit: 0,
+    recharge: 0,
+    queue: 0,
+    rows: 0,        // 0..8  -> board rows = 2 + rows  (max 10)
+    autoDrop: 0,
+    ballGold: 0,
+    ballGreen: 0,
+    ballBlue: 0,
+    ballRed: 0,
+    ballOrange: 0,
+    ballPink: 0,
+    ballRainbow: 0,
+  });
+
+  const state = {
     gold: 0,
     maxGold: 0,
     cooldown: 0,
@@ -46,28 +50,66 @@
     floaters: [],
     queue: 0,
     queueTimer: 0,
-    upg: {
-      chamberValue: 0, // 0/1
-      crit: 0,
-      recharge: 0,
-      queue: 0,
-      autoDrop: 0,
-    },
-  });
-  const state = defaultState();
+    upg: defaultUpg(),
+  };
+
+  // ---- Board geometry (dynamic) ----
+  function rowsCount()    { return 2 + state.upg.rows; }       // 2..10
+  function chamberCount() { return 2 * rowsCount() + 1; }      // 5..21
+  function chamberW()     { return W / chamberCount(); }
+
+  function chamberMultiplier() { return state.upg.chamberValue >= 1 ? 2 : 1; }
+
+  function chamberValues() {
+    const R = rowsCount();
+    const m = chamberMultiplier();
+    const n = chamberCount();
+    const arr = [];
+    for (let i = 0; i < n; i++) arr.push(m * (1 + Math.abs(i - R)));
+    return arr;
+  }
+
+  function pegList() {
+    const R = rowsCount();
+    const cw = chamberW();
+    const spacing = 2 * cw;
+    const topY = PEG_TOP_Y;
+    const botY = CHAMBER_TOP - 35;
+    const gap = R > 1 ? Math.min(85, (botY - topY) / (R - 1)) : 0;
+    const pegs = [];
+    for (let k = 1; k <= R; k++) {
+      const y = topY + (k - 1) * gap;
+      for (let j = 0; j < k; j++) {
+        const x = W / 2 + (j - (k - 1) / 2) * spacing;
+        pegs.push({ x, y });
+      }
+    }
+    return pegs;
+  }
+
+  // ---- Colored balls (independent rolls, highest tier wins) ----
+  const BALL_TIERS = [
+    { id: 'ballGold',    name: 'Gold',    mult: 2,  chance: 0.20, color: '#f5c842' },
+    { id: 'ballGreen',   name: 'Green',   mult: 5,  chance: 0.15, color: '#4fdc6a' },
+    { id: 'ballBlue',    name: 'Blue',    mult: 8,  chance: 0.12, color: '#4f9fff' },
+    { id: 'ballRed',     name: 'Red',     mult: 12, chance: 0.10, color: '#ff5a5a' },
+    { id: 'ballOrange',  name: 'Orange',  mult: 15, chance: 0.07, color: '#ff9b3d' },
+    { id: 'ballPink',    name: 'Pink',    mult: 20, chance: 0.05, color: '#ff7ad9' },
+    { id: 'ballRainbow', name: 'Rainbow', mult: 25, chance: 0.02, color: 'rainbow' },
+  ];
+
+  function rollBall() {
+    let best = { mult: 1, color: 'white' };
+    for (const t of BALL_TIERS) {
+      if (state.upg[t.id] >= 1 && Math.random() < t.chance) {
+        if (t.mult > best.mult) best = { mult: t.mult, color: t.color };
+      }
+    }
+    return best;
+  }
 
   // ---- Upgrade math ----
-  function chamberMultiplier() {
-    return state.upg.chamberValue >= 1 ? 2 : 1;
-  }
-  function chamberValues() {
-    const m = chamberMultiplier();
-    return BASE_CHAMBER_VALUES.map(v => v * m);
-  }
-
-  function critChance() {
-    return state.upg.crit * 0.01;
-  }
+  function critChance() { return state.upg.crit * 0.01; }
   function critCost(level) {
     let c = 50;
     for (let i = 0; i < level; i++) {
@@ -78,21 +120,17 @@
     return c;
   }
 
-  const RECHARGE_MAX_LEVEL = 14; // brings 3.0s down to 0.1s
+  const RECHARGE_MAX_LEVEL = 14;
   function rechargeSeconds() {
     const L = state.upg.recharge;
     if (L <= 0) return BASE_RECHARGE_S;
-    const t = BASE_RECHARGE_S - 0.3 - 0.2 * (L - 1);
-    return Math.max(0.1, t);
+    return Math.max(0.1, BASE_RECHARGE_S - 0.3 - 0.2 * (L - 1));
   }
-  function rechargeCost(level) {
-    return 250 + 500 * level;
-  }
+  function rechargeCost(level) { return 250 + 500 * level; }
+  function cooldownMs() { return rechargeSeconds() * 1000; }
 
   const QUEUE_MAX_LEVEL = 10;
-  function queueCost() { return 200; }
-
-  function cooldownMs() { return rechargeSeconds() * 1000; }
+  const ROWS_MAX_LEVEL = 8; // board rows 2..10
 
   // ---- Persistence ----
   const SAVE_KEY = 'plinco-inc-save-v1';
@@ -110,8 +148,7 @@
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
       if (!s) return;
       if (typeof s.gold === 'number') state.gold = s.gold;
-      if (typeof s.maxGold === 'number') state.maxGold = s.maxGold;
-      else state.maxGold = state.gold;
+      state.maxGold = typeof s.maxGold === 'number' ? s.maxGold : state.gold;
       if (s.upg) Object.assign(state.upg, s.upg);
     } catch {}
   }
@@ -124,66 +161,82 @@
   }
 
   // ---- Upgrade definitions ----
+  function ballUpg(tier) {
+    return {
+      id: tier.id,
+      name: tier.name + ' Balls',
+      unlockAt: tier.unlockAt,
+      maxLevel: 1,
+      level: () => state.upg[tier.id],
+      cost: () => tier.cost,
+      desc: () => state.upg[tier.id] >= 1
+        ? `${tier.name} balls active — ${tier.chance * 100}% spawn, x${tier.mult} in a chamber.`
+        : `${tier.chance * 100}% chance to drop a ${tier.name.toLowerCase()} ball worth x${tier.mult}.`,
+      buy() { state.upg[tier.id] = 1; },
+    };
+  }
+
+  // attach economy data to tiers
+  const TIER_ECON = {
+    ballGold:    { cost: 1000,          unlockAt: 800 },
+    ballGreen:   { cost: 10000,         unlockAt: 8000 },
+    ballBlue:    { cost: 100000,        unlockAt: 80000 },
+    ballRed:     { cost: 500000,        unlockAt: 400000 },
+    ballOrange:  { cost: 10000000,      unlockAt: 8000000 },
+    ballPink:    { cost: 50000000,      unlockAt: 40000000 },
+    ballRainbow: { cost: 5000000000,    unlockAt: 3000000000 },
+  };
+  for (const t of BALL_TIERS) Object.assign(t, TIER_ECON[t.id]);
+
   const UPGRADES = [
     {
-      id: 'chamberValue',
-      name: 'Chamber Value x2',
-      unlockAt: 10,
-      maxLevel: 1,
-      level: () => state.upg.chamberValue,
-      cost: () => 10,
+      id: 'chamberValue', name: 'Chamber Value x2', unlockAt: 10, maxLevel: 1,
+      level: () => state.upg.chamberValue, cost: () => 10,
       desc: () => state.upg.chamberValue >= 1
-        ? 'Chamber payouts doubled (2 / 4 / 6).'
-        : 'Double every chamber payout: 1/2/3 → 2/4/6.',
+        ? 'Chamber payouts doubled.'
+        : 'Double every chamber payout (e.g. 1/2/3 → 2/4/6).',
       buy() { state.upg.chamberValue = 1; },
     },
     {
-      id: 'crit',
-      name: 'Critical Chance',
-      unlockAt: 30,
-      maxLevel: Infinity,
-      level: () => state.upg.crit,
-      cost: () => critCost(state.upg.crit),
-      desc: () => `Each level: +1% chance for a ball to crit (+10% payout). Now: ${state.upg.crit}%.`,
+      id: 'crit', name: 'Critical Chance', unlockAt: 30, maxLevel: Infinity,
+      level: () => state.upg.crit, cost: () => critCost(state.upg.crit),
+      desc: () => `+1% crit chance per level (crit = +10% payout). Now: ${state.upg.crit}%.`,
       buy() { state.upg.crit++; },
     },
     {
-      id: 'recharge',
-      name: 'Faster Recharge',
-      unlockAt: 200,
-      maxLevel: RECHARGE_MAX_LEVEL,
-      level: () => state.upg.recharge,
-      cost: () => rechargeCost(state.upg.recharge),
-      desc: () => `Recharge: ${rechargeSeconds().toFixed(1)}s. First level −0.3s, then −0.2s each (min 0.1s).`,
+      id: 'recharge', name: 'Faster Recharge', unlockAt: 200, maxLevel: RECHARGE_MAX_LEVEL,
+      level: () => state.upg.recharge, cost: () => rechargeCost(state.upg.recharge),
+      desc: () => `Recharge: ${rechargeSeconds().toFixed(1)}s. −0.3s first level, then −0.2s (min 0.1s).`,
       buy() { state.upg.recharge++; },
     },
     {
-      id: 'queue',
-      name: 'Ball Queue',
-      unlockAt: 150,
-      maxLevel: QUEUE_MAX_LEVEL,
-      level: () => state.upg.queue,
-      cost: () => queueCost(),
-      desc: () => `Store taps in a queue (cap ${state.upg.queue}/${QUEUE_MAX_LEVEL}); one queued ball drops every second.`,
+      id: 'queue', name: 'Ball Queue', unlockAt: 150, maxLevel: QUEUE_MAX_LEVEL,
+      level: () => state.upg.queue, cost: () => 200,
+      desc: () => `Bank taps during cooldown (cap ${state.upg.queue}/${QUEUE_MAX_LEVEL}); 1 drops per second.`,
       buy() { state.upg.queue++; },
     },
     {
-      id: 'autoDrop',
-      name: 'Auto-Dropper',
-      unlockAt: 2500,
-      maxLevel: 1,
-      level: () => state.upg.autoDrop,
-      cost: () => 3000,
+      id: 'rows', name: 'Add Row', unlockAt: 450, maxLevel: ROWS_MAX_LEVEL,
+      level: () => state.upg.rows,
+      cost: () => (state.upg.rows === 0 ? 500 : 1000),
+      desc: () => {
+        const R = rowsCount();
+        return `Board: ${R} rows / ${chamberCount()} chambers. +1 row, +2 chambers (max 10 rows).`;
+      },
+      buy() { state.upg.rows++; },
+    },
+    {
+      id: 'autoDrop', name: 'Auto-Dropper', unlockAt: 2500, maxLevel: 1,
+      level: () => state.upg.autoDrop, cost: () => 3000,
       desc: () => state.upg.autoDrop >= 1
         ? 'Balls drop automatically every recharge.'
         : 'Automatically drop a ball each time the coin recharges.',
       buy() { state.upg.autoDrop = 1; },
     },
+    ...BALL_TIERS.map(ballUpg),
   ];
 
-  function canBuy(u) {
-    return u.level() < u.maxLevel && state.gold >= u.cost();
-  }
+  function canBuy(u) { return u.level() < u.maxLevel && state.gold >= u.cost(); }
   function purchase(u) {
     if (!canBuy(u)) return;
     state.gold -= u.cost();
@@ -196,13 +249,15 @@
   let panelOpen = false;
   function openPanel() { panelOpen = true; overlay.hidden = false; renderPanel(); }
   function closePanel() { panelOpen = false; overlay.hidden = true; }
-
   menuBtn.addEventListener('click', openPanel);
   closeBtn.addEventListener('click', closePanel);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closePanel(); });
 
   function fmt(n) {
-    return n.toLocaleString('en-US');
+    if (n >= 1e9) return (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 2) + 'B';
+    if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2) + 'M';
+    if (n >= 1e4) return Math.round(n).toLocaleString('en-US');
+    return Math.round(n).toLocaleString('en-US');
   }
 
   function renderPanel() {
@@ -212,8 +267,7 @@
     if (visible.length === 0) {
       const p = document.createElement('div');
       p.className = 'upg-desc';
-      p.style.padding = '20px';
-      p.style.textAlign = 'center';
+      p.style.cssText = 'padding:20px;text-align:center';
       p.textContent = 'Earn more gold to unlock upgrades.';
       upgradeList.appendChild(p);
       return;
@@ -229,15 +283,13 @@
       const name = document.createElement('div');
       name.className = 'upg-name';
       name.textContent = u.name;
-      if (u.maxLevel !== 1 && u.maxLevel !== Infinity) {
+      if (u.maxLevel === Infinity) {
         const ls = document.createElement('span');
-        ls.className = 'lvl';
-        ls.textContent = `Lv ${lvl}/${u.maxLevel}`;
+        ls.className = 'lvl'; ls.textContent = `Lv ${lvl}`;
         name.appendChild(ls);
-      } else if (u.maxLevel === Infinity) {
+      } else if (u.maxLevel > 1) {
         const ls = document.createElement('span');
-        ls.className = 'lvl';
-        ls.textContent = `Lv ${lvl}`;
+        ls.className = 'lvl'; ls.textContent = `Lv ${lvl}/${u.maxLevel}`;
         name.appendChild(ls);
       }
       const desc = document.createElement('div');
@@ -250,21 +302,18 @@
       btn.className = 'buy-btn';
       if (maxed) {
         btn.classList.add('maxed');
-        btn.textContent = 'MAX';
+        btn.textContent = u.maxLevel === 1 ? 'OWNED' : 'MAX';
         btn.disabled = true;
       } else {
         btn.textContent = fmt(u.cost()) + 'g';
         btn.disabled = state.gold < u.cost();
         btn.addEventListener('click', () => purchase(u));
       }
-
       row.appendChild(info);
       row.appendChild(btn);
       upgradeList.appendChild(row);
     }
   }
-
-  // periodic refresh so affordability updates while panel is open
   setInterval(() => { if (panelOpen) renderPanel(); }, 300);
 
   // ---- Input ----
@@ -275,13 +324,10 @@
       y: (e.clientY - r.top)  * (H / r.height),
     };
   }
-
   function tappedCoin(p) {
-    const dx = p.x - COIN.x;
-    const dy = p.y - COIN.y;
+    const dx = p.x - COIN.x, dy = p.y - COIN.y;
     return dx * dx + dy * dy <= COIN.r * COIN.r;
   }
-
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const p = canvasPoint(e);
@@ -295,6 +341,7 @@
   });
 
   function dropBall() {
+    const t = rollBall();
     state.balls.push({
       x: COIN.x + (Math.random() - 0.5) * 1.5,
       y: COIN.y + COIN.r + BALL_R + 1,
@@ -303,22 +350,20 @@
       age: 0,
       resting: 0,
       done: false,
+      mult: t.mult,
+      color: t.color,
     });
   }
 
   // ---- Physics ----
   function step(dt) {
-    if (state.cooldown > 0) {
-      state.cooldown = Math.max(0, state.cooldown - dt * 1000);
-    }
+    if (state.cooldown > 0) state.cooldown = Math.max(0, state.cooldown - dt * 1000);
 
-    // Auto-dropper
     if (state.upg.autoDrop >= 1 && state.cooldown <= 0) {
       dropBall();
       state.cooldown = cooldownMs();
     }
 
-    // Queue release (one per second)
     if (state.upg.queue > 0 && state.queue > 0) {
       state.queueTimer += dt * 1000;
       if (state.queueTimer >= QUEUE_INTERVAL_MS) {
@@ -330,19 +375,20 @@
       state.queueTimer = 0;
     }
 
+    const pegs = pegList();
     const values = chamberValues();
+    const n = chamberCount();
+    const cw = chamberW();
 
     for (const b of state.balls) {
       if (b.done) continue;
       b.age += dt;
-
       b.vy += GRAVITY * dt;
       b.x  += b.vx * dt;
       b.y  += b.vy * dt;
 
-      for (const p of PEGS) {
-        const dx = b.x - p.x;
-        const dy = b.y - p.y;
+      for (const p of pegs) {
+        const dx = b.x - p.x, dy = b.y - p.y;
         const d2 = dx * dx + dy * dy;
         const md = BALL_R + PEG_R;
         if (d2 < md * md && d2 > 0.0001) {
@@ -363,8 +409,8 @@
       if (b.x + BALL_R > W) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * RESTITUTION; }
 
       if (b.y + BALL_R > CHAMBER_TOP) {
-        for (let i = 1; i < CHAMBER_COUNT; i++) {
-          const wx = i * CHAMBER_W;
+        for (let i = 1; i < n; i++) {
+          const wx = i * cw;
           const dx = b.x - wx;
           if (Math.abs(dx) < BALL_R) {
             if (dx < 0) { b.x = wx - BALL_R; b.vx = -Math.abs(b.vx) * RESTITUTION; }
@@ -375,44 +421,52 @@
 
       if (b.y + BALL_R >= FLOOR_Y) {
         b.y = FLOOR_Y - BALL_R;
-        if (b.vy > 50) {
-          b.vy = -b.vy * RESTITUTION;
-          b.vx *= 0.7;
-        } else {
-          b.vy = 0;
-          b.vx *= 0.85;
-          b.resting += dt;
-        }
+        if (b.vy > 50) { b.vy = -b.vy * RESTITUTION; b.vx *= 0.7; }
+        else { b.vy = 0; b.vx *= 0.85; b.resting += dt; }
       } else {
         b.resting = 0;
       }
 
       if (b.resting > 0.25 && !b.done) {
-        const idx = Math.min(CHAMBER_COUNT - 1, Math.max(0, Math.floor(b.x / CHAMBER_W)));
-        let value = values[idx];
+        const idx = Math.min(n - 1, Math.max(0, Math.floor(b.x / cw)));
+        let value = values[idx] * b.mult;
         const isCrit = Math.random() < critChance();
         if (isCrit) value = Math.ceil(value * 1.1);
         addGold(value);
         state.floaters.push({
-          x: idx * CHAMBER_W + CHAMBER_W / 2,
-          y: CHAMBER_TOP + 20,
-          text: (isCrit ? 'CRIT +' : '+') + value + 'g',
+          x: idx * cw + cw / 2,
+          y: CHAMBER_TOP + 16,
+          text: (isCrit ? 'CRIT +' : '+') + fmt(value) + 'g',
           crit: isCrit,
+          color: b.color,
           life: 0,
         });
         b.done = true;
       }
 
-      if (b.age > 12 && !b.done) b.done = true;
+      if (b.age > 14 && !b.done) b.done = true;
     }
 
     state.balls = state.balls.filter(b => !b.done);
-
     for (const f of state.floaters) f.life += dt;
     state.floaters = state.floaters.filter(f => f.life < 1.0);
   }
 
   // ---- Rendering ----
+  function ballFill(x, y, r, color) {
+    if (color === 'rainbow') {
+      const hue = (x * 2 + performance.now() / 8) % 360;
+      const g = ctx.createRadialGradient(x - r / 3, y - r / 3, 1, x, y, r);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(1, `hsl(${hue}, 90%, 58%)`);
+      return g;
+    }
+    const g = ctx.createRadialGradient(x - r / 3, y - r / 3, 1, x, y, r);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(1, color === 'white' ? '#7d86b8' : color);
+    return g;
+  }
+
   function drawCoin() {
     const ready = state.cooldown <= 0;
     ctx.save();
@@ -421,23 +475,13 @@
       glow.addColorStop(0, 'rgba(245, 200, 66, 0.35)');
       glow.addColorStop(1, 'rgba(245, 200, 66, 0)');
       ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(COIN.x, COIN.y, COIN.r * 1.8, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(COIN.x, COIN.y, COIN.r * 1.8, 0, Math.PI * 2); ctx.fill();
     }
     const g = ctx.createRadialGradient(COIN.x - 10, COIN.y - 10, 4, COIN.x, COIN.y, COIN.r);
-    if (ready) {
-      g.addColorStop(0, '#fff1a8');
-      g.addColorStop(0.6, '#f5c842');
-      g.addColorStop(1, '#a87510');
-    } else {
-      g.addColorStop(0, '#6a6f88');
-      g.addColorStop(1, '#2f334a');
-    }
+    if (ready) { g.addColorStop(0, '#fff1a8'); g.addColorStop(0.6, '#f5c842'); g.addColorStop(1, '#a87510'); }
+    else { g.addColorStop(0, '#6a6f88'); g.addColorStop(1, '#2f334a'); }
     ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(COIN.x, COIN.y, COIN.r, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(COIN.x, COIN.y, COIN.r, 0, Math.PI * 2); ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = ready ? '#ffd75a' : '#3a3f5a';
     ctx.stroke();
@@ -454,92 +498,72 @@
     const progress = cd > 0 ? 1 - state.cooldown / cd : 1;
     ctx.save();
     ctx.fillStyle = '#1d2238';
-    roundRect(ctx, BAR.x, BAR.y, BAR.w, BAR.h, 5);
-    ctx.fill();
+    roundRect(ctx, BAR.x, BAR.y, BAR.w, BAR.h, 5); ctx.fill();
     const fillW = Math.max(0, Math.min(BAR.w, BAR.w * progress));
     if (fillW > 0) {
       const fg = ctx.createLinearGradient(BAR.x, 0, BAR.x + BAR.w, 0);
       if (state.cooldown > 0) { fg.addColorStop(0, '#3a8dff'); fg.addColorStop(1, '#5fb7ff'); }
       else { fg.addColorStop(0, '#2dd06a'); fg.addColorStop(1, '#7ef0a4'); }
       ctx.fillStyle = fg;
-      roundRect(ctx, BAR.x, BAR.y, fillW, BAR.h, 5);
-      ctx.fill();
+      roundRect(ctx, BAR.x, BAR.y, fillW, BAR.h, 5); ctx.fill();
     }
     ctx.lineWidth = 1;
     ctx.strokeStyle = '#3a4060';
-    roundRect(ctx, BAR.x, BAR.y, BAR.w, BAR.h, 5);
-    ctx.stroke();
+    roundRect(ctx, BAR.x, BAR.y, BAR.w, BAR.h, 5); ctx.stroke();
 
-    // Queue pips
     if (state.upg.queue > 0) {
       const pipR = 4, gap = 12;
-      const total = state.upg.queue * gap;
-      let px = W / 2 - total / 2 + gap / 2;
+      let px = W / 2 - (state.upg.queue * gap) / 2 + gap / 2;
       const py = BAR.y + BAR.h + 14;
       for (let i = 0; i < state.upg.queue; i++) {
-        ctx.beginPath();
-        ctx.arc(px, py, pipR, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(px, py, pipR, 0, Math.PI * 2);
         ctx.fillStyle = i < state.queue ? '#f5c842' : '#2a2f4d';
-        ctx.fill();
-        px += gap;
+        ctx.fill(); px += gap;
       }
     }
     ctx.restore();
   }
 
   function drawBoard() {
-    for (const p of PEGS) {
+    const pegs = pegList();
+    for (const p of pegs) {
       const g = ctx.createRadialGradient(p.x - 2, p.y - 2, 1, p.x, p.y, PEG_R);
       g.addColorStop(0, '#ffffff');
       g.addColorStop(1, '#8a92b8');
       ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, PEG_R, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, PEG_R, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#4a517a';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.lineWidth = 1; ctx.stroke();
     }
 
+    const n = chamberCount();
+    const cw = chamberW();
+    const values = chamberValues();
     ctx.fillStyle = '#3a4070';
-    for (let i = 1; i < CHAMBER_COUNT; i++) {
-      ctx.fillRect(i * CHAMBER_W - 1.5, CHAMBER_TOP, 3, FLOOR_Y - CHAMBER_TOP);
-    }
+    for (let i = 1; i < n; i++) ctx.fillRect(i * cw - 1, CHAMBER_TOP, 2, FLOOR_Y - CHAMBER_TOP);
     ctx.fillRect(0, FLOOR_Y, W, 3);
 
-    const values = chamberValues();
+    const R = rowsCount();
+    const fs = Math.max(7, Math.min(13, Math.round(cw * 0.42)));
+    ctx.font = `bold ${fs}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (let i = 0; i < CHAMBER_COUNT; i++) {
-      const cx = i * CHAMBER_W + CHAMBER_W / 2;
-      const cy = (CHAMBER_TOP + FLOOR_Y) / 2 + 38;
+    const cy = FLOOR_Y - 16;
+    for (let i = 0; i < n; i++) {
+      const cx = i * cw + cw / 2;
       const v = values[i];
-      const base = BASE_CHAMBER_VALUES[i];
-      const pillW = 48, pillH = 22;
-      ctx.fillStyle = '#0d1022';
-      roundRect(ctx, cx - pillW / 2, cy - pillH / 2, pillW, pillH, 11);
-      ctx.fill();
-      ctx.strokeStyle = '#2a2f4d';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = base === 1 ? '#9aa0c8' : base === 2 ? '#86d6ff' : '#f5c842';
-      ctx.font = 'bold 13px system-ui, sans-serif';
-      ctx.fillText(v + 'g', cx, cy + 1);
+      const ratio = (v / chamberMultiplier() - 1) / R; // 0 center .. 1 edge
+      ctx.fillStyle = ratio < 0.34 ? '#9aa0c8' : ratio < 0.67 ? '#86d6ff' : '#f5c842';
+      ctx.fillText(cw >= 34 ? v + 'g' : String(v), cx, cy);
     }
   }
 
   function drawBalls() {
     for (const b of state.balls) {
-      const g = ctx.createRadialGradient(b.x - 3, b.y - 3, 1, b.x, b.y, BALL_R);
-      g.addColorStop(0, '#ffffff');
-      g.addColorStop(1, '#7d86b8');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, BALL_R, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#3a4070';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.fillStyle = ballFill(b.x, b.y, BALL_R, b.color);
+      ctx.beginPath(); ctx.arc(b.x, b.y, BALL_R, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#2c3258';
+      ctx.lineWidth = 1; ctx.stroke();
     }
   }
 
@@ -550,10 +574,17 @@
       const t = f.life;
       const alpha = Math.max(0, 1 - t);
       const dy = -30 * t;
-      ctx.font = `bold ${f.crit ? 18 : 16}px system-ui, sans-serif`;
-      ctx.fillStyle = f.crit
-        ? `rgba(255, 120, 90, ${alpha})`
-        : `rgba(245, 200, 66, ${alpha})`;
+      ctx.font = `bold ${f.crit ? 17 : 15}px system-ui, sans-serif`;
+      let col;
+      if (f.crit) col = `rgba(255,120,90,${alpha})`;
+      else if (f.color && f.color !== 'white' && f.color !== 'rainbow') {
+        col = f.color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+      } else if (f.color === 'rainbow') {
+        col = `hsla(${(f.x * 3) % 360},90%,62%,${alpha})`;
+      } else {
+        col = `rgba(245,200,66,${alpha})`;
+      }
+      ctx.fillStyle = col;
       ctx.fillText(f.text, f.x, f.y + dy);
     }
   }
@@ -578,13 +609,11 @@
     drawFloaters();
   }
 
-  // ---- HUD sync ----
   function syncHud() {
     goldDisplay.textContent = fmt(state.gold) + 'g';
     menuBtn.hidden = state.maxGold < 10;
   }
 
-  // ---- Main loop ----
   let last = 0;
   function loop(t) {
     if (!last) last = t;
