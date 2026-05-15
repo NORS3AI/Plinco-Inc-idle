@@ -12,11 +12,12 @@
 
   // ---- Layout ----
   const COIN = { x: W / 2, y: 64, r: 30 };
-  const BAR  = { x: (W - 200) / 2, y: COIN.y + COIN.r + 18, w: 200, h: 10 };
+  const BAR  = { x: (W - 200) / 2, y: COIN.y + COIN.r + 6, w: 200, h: 10 };
 
   const PEG_R = 7;
-  const CONTENT_TOP = 150;       // first peg row never goes above this
-  const CONTENT_BOTTOM = H - 14; // floor never goes below this
+  const SPAWN_Y = BAR.y + BAR.h + 24; // ball drop point (clear of bar + pips)
+  const ENTRY_GAP = 12;          // drop point -> first peg row
+  const CONTENT_BOTTOM = H - 14;  // floor never goes below this
   const CHAMBER_H = 35;          // short slot
   const GAP_TO_SLOT = 12;        // slot sits right under the last peg row
   const PREFERRED_GAP = 78;      // ideal vertical spacing between peg rows
@@ -81,30 +82,17 @@
     return arr;
   }
 
-  // Lay out the peg rows + slot. The slot always sits GAP_TO_SLOT below the
-  // last peg row, whatever the row count. Compact boards are centered in the
-  // available space; tall boards compress to fit.
+  // Lay out the peg rows + slot. First row sits ENTRY_GAP below the drop
+  // point; slot sits GAP_TO_SLOT below the last row. Rows use PREFERRED_GAP
+  // spacing, compressing only if a tall board would overflow the canvas.
   function computeLayout() {
     const R = rowsCount();
     const cw = chamberW();
     const spacing = 2 * cw;
-    const avail = CONTENT_BOTTOM - CONTENT_TOP;
+    const startY = SPAWN_Y + ENTRY_GAP;
     const tail = GAP_TO_SLOT + CHAMBER_H;
-
-    let gap, startY;
-    if (R > 1) {
-      const neededPref = (R - 1) * PREFERRED_GAP + tail;
-      if (neededPref <= avail) {
-        gap = PREFERRED_GAP;
-        startY = CONTENT_TOP + (avail - neededPref) / 2;
-      } else {
-        gap = (avail - tail) / (R - 1);
-        startY = CONTENT_TOP;
-      }
-    } else {
-      gap = 0;
-      startY = CONTENT_TOP + (avail - tail) / 2;
-    }
+    const maxSpan = CONTENT_BOTTOM - tail - startY;
+    const gap = R > 1 ? Math.min(PREFERRED_GAP, maxSpan / (R - 1)) : 0;
 
     const pegs = [];
     for (let k = 1; k <= R; k++) {
@@ -291,11 +279,16 @@
   closeBtn.addEventListener('click', closePanel);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closePanel(); });
 
+  const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc',
+                 'Ud', 'Dd', 'Td', 'Qad', 'Qid', 'Sxd', 'Spd', 'Ocd', 'Nod', 'Vg'];
   function fmt(n) {
-    if (n >= 1e9) return (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 2) + 'B';
-    if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2) + 'M';
-    if (n >= 1e4) return Math.round(n).toLocaleString('en-US');
-    return Math.round(n).toLocaleString('en-US');
+    n = Math.round(n);
+    if (n < 1e6) return n.toLocaleString('en-US');
+    let tier = Math.floor(Math.log10(n) / 3);
+    if (tier >= UNITS.length) tier = UNITS.length - 1;
+    const scaled = n / Math.pow(10, tier * 3);
+    const dec = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
+    return scaled.toFixed(dec) + UNITS[tier];
   }
 
   function renderPanel() {
@@ -382,7 +375,7 @@
     const t = rollBall();
     state.balls.push({
       x: COIN.x + (Math.random() - 0.5) * 1.5,
-      y: COIN.y + COIN.r + BALL_R + 1,
+      y: SPAWN_Y,
       vx: (Math.random() - 0.5) * 40,
       vy: 0,
       age: 0,
@@ -528,7 +521,7 @@
     if (state.upg.queue > 0) {
       const pipR = 4, gap = 12;
       let px = W / 2 - (state.upg.queue * gap) / 2 + gap / 2;
-      const py = BAR.y + BAR.h + 14;
+      const py = BAR.y + BAR.h + 8;
       for (let i = 0; i < state.upg.queue; i++) {
         ctx.beginPath(); ctx.arc(px, py, pipR, 0, Math.PI * 2);
         ctx.fillStyle = i < state.queue ? '#f5c842' : '#2a2f4d';
