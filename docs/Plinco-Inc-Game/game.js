@@ -46,6 +46,13 @@
   const RESTITUTION = 0.92;       // normal pegs — super bouncy
   const DULL_RESTITUTION = 0.18;  // top (first) peg — absorbs most bounce
   const WALL_RESTITUTION = 0.85;  // side walls — extra bouncy
+  const MOVER_LEN = 70;           // moving bar length
+  const MOVER_T = 7;              // moving bar thickness
+  // Each bar moves independently across the board for chaos.
+  const movers = Array.from({ length: 5 }, (_, i) => ({
+    x: W / 2,
+    vx: (90 + i * 35 + Math.random() * 90) * (Math.random() < 0.5 ? -1 : 1),
+  }));
   const BASE_RECHARGE_S = 3.0;
   const QUEUE_INTERVAL_MS = 1000;
 
@@ -55,7 +62,8 @@
     crit: 0,
     recharge: 0,
     queue: 0,
-    rows: 0,        // 0..8  -> board rows = 2 + rows  (max 10)
+    rows: 0,        // 0..4  -> chambers = 1 + rows  (max 5)
+    movers: 0,      // 0..5  -> moving bars between rows
     autoDrop: 0,
     ballGold: 0,
     ballGreen: 0,
@@ -126,8 +134,10 @@
     const gap = R > 1 ? Math.min(PREFERRED_GAP, maxSpan / (R - 1)) : 0;
 
     const pegs = [];
+    const rowYs = [];
     for (let k = 1; k <= R; k++) {
       const y = startY + (k - 1) * gap;
+      rowYs.push(y);
       for (let j = 0; j < k; j++) {
         pegs.push({ x: W / 2 + (j - (k - 1) / 2) * spacing, y, dull: k === 1 });
       }
@@ -137,6 +147,7 @@
     const chamberTop = lastRowY + gapToSlot;
     return {
       pegs,
+      rowYs,
       chamberTop,
       floorY: chamberTop + CHAMBER_H,
       cw,
@@ -280,6 +291,17 @@
       cost: () => 1000 * Math.pow(10, state.upg.rows),
       desc: () => `Board: ${chamberCount()} chamber${chamberCount() === 1 ? '' : 's'}. +1 chamber & peg row (max 5).`,
       buy() { state.upg.rows++; },
+    },
+    {
+      id: 'movers', name: 'Moving Bar', unlockAt: 1000, maxLevel: 5,
+      level: () => state.upg.movers,
+      cost: () => [1000, 10000, 100000, 1000000, 1000000000][state.upg.movers],
+      desc: () => {
+        const next = state.upg.movers + 1;
+        const where = next < 5 ? `between rows ${next} and ${next + 1}` : 'after the last row';
+        return `Bar ${next}/5: a short bar ${where} that slides back & forth — balls bounce off it. Each moves on its own for chaos.`;
+      },
+      buy() { state.upg.movers++; },
     },
     {
       id: 'autoDrop', name: 'Auto-Dropper', unlockAt: 2500, maxLevel: 1,
@@ -508,6 +530,24 @@
     sfx('drop');
   }
 
+  // Active moving bars with their current y (between the relevant rows).
+  function moverList() {
+    if (!LO) return [];
+    const ys = LO.rowYs, R = ys.length, owned = state.upg.movers, list = [];
+    for (let m = 1; m <= owned && m <= 5; m++) {
+      let y;
+      if (m <= 4) {
+        if (R < m + 1) continue;          // need both rows present
+        y = (ys[m - 1] + ys[m]) / 2;
+      } else {
+        if (R < 5) continue;              // 5th bar sits after the last row
+        y = (ys[4] + LO.chamberTop) / 2;
+      }
+      list.push({ y, mv: movers[m - 1] });
+    }
+    return list;
+  }
+
   // ---- Physics ----
   function step(dt) {
     if (state.cooldown > 0) state.cooldown = Math.max(0, state.cooldown - dt * 1000);
@@ -527,6 +567,20 @@
     } else {
       state.queueTimer = 0;
     }
+
+    // Move every bar independently; bounce off the edges with a random tweak.
+    const half = MOVER_LEN / 2;
+    for (const mv of movers) {
+      mv.x += mv.vx * dt;
+      if (mv.x < half) {
+        mv.x = half;
+        mv.vx = Math.abs(mv.vx) * (0.85 + Math.random() * 0.5);
+      } else if (mv.x > W - half) {
+        mv.x = W - half;
+        mv.vx = -Math.abs(mv.vx) * (0.85 + Math.random() * 0.5);
+      }
+    }
+    const activeMovers = moverList();
 
     const { pegs, values, n, cw, chamberTop } = LO;
 
@@ -553,6 +607,27 @@
             b.vy -= (1 + e) * vn * ny;
           }
           b.vx += (Math.random() - 0.5) * 60;
+        }
+      }
+
+      for (const am of activeMovers) {
+        const xL = am.mv.x - MOVER_LEN / 2, xR = am.mv.x + MOVER_LEN / 2;
+        const nearestX = Math.max(xL, Math.min(b.x, xR));
+        const nearestY = Math.max(am.y - MOVER_T / 2, Math.min(b.y, am.y + MOVER_T / 2));
+        const dx = b.x - nearestX, dy = b.y - nearestY;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < BALL_R * BALL_R) {
+          const d = Math.sqrt(d2) || 0.0001;
+          const nx = d2 > 0.0001 ? dx / d : 0;
+          const ny = d2 > 0.0001 ? dy / d : -1;
+          b.x = nearestX + nx * BALL_R;
+          b.y = nearestY + ny * BALL_R;
+          const vn = b.vx * nx + b.vy * ny;
+          if (vn < 0) {
+            b.vx -= 1.9 * vn * nx;
+            b.vy -= 1.9 * vn * ny;
+          }
+          b.vx += am.mv.vx * 0.35 + (Math.random() - 0.5) * 110;
         }
       }
 
@@ -665,6 +740,19 @@
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(p.x, p.y, PEG_R, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#4a517a';
+      ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    for (const am of moverList()) {
+      const x = am.mv.x - MOVER_LEN / 2;
+      const g = ctx.createLinearGradient(x, 0, x + MOVER_LEN, 0);
+      g.addColorStop(0, '#3fe0e0');
+      g.addColorStop(0.5, '#7af7f7');
+      g.addColorStop(1, '#3fe0e0');
+      ctx.fillStyle = g;
+      roundRect(ctx, x, am.y - MOVER_T / 2, MOVER_LEN, MOVER_T, MOVER_T / 2);
+      ctx.fill();
+      ctx.strokeStyle = '#1f8a8a';
       ctx.lineWidth = 1; ctx.stroke();
     }
 
