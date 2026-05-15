@@ -19,6 +19,8 @@
   const dbgGold = document.getElementById('dbgGold');
   const dbgGap = document.getElementById('dbgGap');
   const dbgGapVal = document.getElementById('dbgGapVal');
+  const dbgEntry = document.getElementById('dbgEntry');
+  const dbgEntryVal = document.getElementById('dbgEntryVal');
 
   // ---- Layout ----
   const COIN = { x: W / 2, y: 64, r: 30 };
@@ -26,7 +28,7 @@
 
   const PEG_R = 7;
   const SPAWN_Y = BAR.y + BAR.h + 24; // ball drop point (clear of bar + pips)
-  const ENTRY_GAP = 12;          // drop point -> first peg row
+  // drop point -> first peg row — tunable via Debug settings for now
   const CONTENT_BOTTOM = H - 14;  // floor never goes below this
   const CHAMBER_H = 35;          // short slot
   const PREFERRED_GAP = 78;      // ideal vertical spacing between peg rows
@@ -62,6 +64,7 @@
     fx: true,
     mute: false,
     gapToSlot: 28,
+    entryGap: 12,
   });
 
   const state = {
@@ -100,7 +103,7 @@
     return arr;
   }
 
-  // Lay out the peg rows + slot. First row sits ENTRY_GAP below the drop
+  // Lay out the peg rows + slot. First row sits entryGap below the drop
   // point; slot sits gapToSlot below the last row. Rows use PREFERRED_GAP
   // spacing, compressing only if a tall board would overflow the canvas.
   function computeLayout() {
@@ -108,7 +111,7 @@
     const cw = chamberW();
     const spacing = 2 * cw;
     const gapToSlot = state.settings.gapToSlot;
-    const startY = SPAWN_Y + ENTRY_GAP;
+    const startY = SPAWN_Y + state.settings.entryGap;
     const tail = gapToSlot + CHAMBER_H;
     const maxSpan = CONTENT_BOTTOM - tail - startY;
     const gap = R > 1 ? Math.min(PREFERRED_GAP, maxSpan / (R - 1)) : 0;
@@ -339,6 +342,8 @@
     setMute.setAttribute('aria-checked', String(state.settings.mute));
     dbgGap.value = String(state.settings.gapToSlot);
     dbgGapVal.textContent = state.settings.gapToSlot + 'px';
+    dbgEntry.value = String(state.settings.entryGap);
+    dbgEntryVal.textContent = state.settings.entryGap + 'px';
   }
   function openSettings() {
     settingsOverlay.hidden = false;
@@ -366,6 +371,12 @@
     const v = Math.max(12, Math.min(100, parseInt(dbgGap.value, 10) || 28));
     state.settings.gapToSlot = v;
     dbgGapVal.textContent = v + 'px';
+    save();
+  });
+  dbgEntry.addEventListener('input', () => {
+    const v = Math.max(10, Math.min(100, parseInt(dbgEntry.value, 10) || 12));
+    state.settings.entryGap = v;
+    dbgEntryVal.textContent = v + 'px';
     save();
   });
 

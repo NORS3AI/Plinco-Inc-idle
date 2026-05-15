@@ -3,8 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Plinco Inc.</title>
-  <link rel="stylesheet" href="style.css">
+  <script>
+    // Cache-bust CSS/JS during active development so Pages rebuilds load fresh.
+    var BUST = Date.now();
+    document.write('<link rel="stylesheet" href="style.css?t=' + BUST + '">');
+  </script>
 </head>
 <body>
   <main class="wrap">
@@ -60,7 +65,14 @@
         </div>
         <div class="set-row set-col">
           <div class="set-slider-head">
-            <span class="set-label">Chamber gap</span>
+            <span class="set-label">Drop &rarr; row 1 gap</span>
+            <span id="dbgEntryVal" class="set-val">12px</span>
+          </div>
+          <input id="dbgEntry" class="slider" type="range" min="10" max="100" step="1" value="12">
+        </div>
+        <div class="set-row set-col">
+          <div class="set-slider-head">
+            <span class="set-label">Last row &rarr; chamber gap</span>
             <span id="dbgGapVal" class="set-val">28px</span>
           </div>
           <input id="dbgGap" class="slider" type="range" min="12" max="100" step="1" value="28">
@@ -69,6 +81,6 @@
     </div>
   </div>
 
-  <script src="game.js"></script>
+  <script>document.write('<script src="game.js?t=' + BUST + '"><\/script>');</script>
 </body>
 </html>
