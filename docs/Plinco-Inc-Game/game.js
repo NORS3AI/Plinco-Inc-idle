@@ -115,7 +115,7 @@
   function computeLayout() {
     const R = rowsCount();
     const cw = chamberW();
-    const spacing = 2 * cw;
+    const spacing = 1.2 * cw;       // tighter so the ball can't slip through
     const gapToSlot = state.settings.gapToSlot;
     const startY = SPAWN_Y + state.settings.entryGap;
     const tail = gapToSlot + CHAMBER_H;
@@ -124,9 +124,10 @@
 
     const pegs = [];
     for (let k = 1; k <= R; k++) {
+      const count = k + 2;                       // 2 extra pegs per row
       const y = startY + (k - 1) * gap;
-      for (let j = 0; j < k; j++) {
-        pegs.push({ x: W / 2 + (j - (k - 1) / 2) * spacing, y, dull: k === 1 });
+      for (let j = 0; j < count; j++) {
+        pegs.push({ x: W / 2 + (j - (count - 1) / 2) * spacing, y, dull: k === 1 });
       }
     }
 
