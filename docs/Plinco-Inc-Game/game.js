@@ -30,7 +30,7 @@
   const COIN = { x: W / 2, y: 64, r: 30 };
   const BAR  = { x: (W - 200) / 2, y: COIN.y + COIN.r + 6, w: 200, h: 10 };
 
-  const PEG_R = 7;
+  const PEG_R = 10.5;  // 7 * 1.5
   const SPAWN_Y = BAR.y + BAR.h + 24; // ball drop point (clear of bar + pips)
   // drop point -> first peg row — tunable via Debug settings for now
   const CONTENT_BOTTOM = H - 14;  // floor never goes below this
