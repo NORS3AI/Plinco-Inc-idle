@@ -409,7 +409,8 @@
   function renderPanel() {
     if (!panelOpen) return;
     upgradeList.innerHTML = '';
-    const visible = UPGRADES.filter(u => state.maxGold >= u.unlockAt);
+    const visible = UPGRADES.filter(u =>
+      state.maxGold >= u.unlockAt && u.level() < u.maxLevel);
     if (visible.length === 0) {
       const p = document.createElement('div');
       p.className = 'upg-desc';
