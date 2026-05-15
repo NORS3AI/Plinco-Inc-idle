@@ -76,11 +76,11 @@
     const cw = chamberW();
     const spacing = 2 * cw;
     const topY = PEG_TOP_Y;
-    const botY = CHAMBER_TOP - 35;
-    const gap = R > 1 ? Math.min(85, (botY - topY) / (R - 1)) : 0;
+    const botY = CHAMBER_TOP - 30;                       // bottom row sits just above the slot
+    const gap = R > 1 ? Math.min(110, (botY - topY) / (R - 1)) : 0;
     const pegs = [];
     for (let k = 1; k <= R; k++) {
-      const y = topY + (k - 1) * gap;
+      const y = botY - (R - k) * gap;                    // anchor from the bottom up
       for (let j = 0; j < k; j++) {
         const x = W / 2 + (j - (k - 1) / 2) * spacing;
         pegs.push({ x, y });
@@ -409,8 +409,8 @@
       if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * RESTITUTION; }
       if (b.x + BALL_R > W) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * RESTITUTION; }
 
-      // Score the instant the ball enters the chamber slot
-      if (b.y + BALL_R >= CHAMBER_TOP && !b.done) {
+      // Score the instant the ball enters the slot (or if it ever gets stuck)
+      if (!b.done && (b.y + BALL_R >= CHAMBER_TOP || b.age > 14)) {
         const idx = Math.min(n - 1, Math.max(0, Math.floor(b.x / cw)));
         let value = values[idx] * b.mult;
         const isCrit = Math.random() < critChance();
@@ -426,8 +426,6 @@
         });
         b.done = true;
       }
-
-      if (b.age > 14 && !b.done) b.done = true;
     }
 
     state.balls = state.balls.filter(b => !b.done);
