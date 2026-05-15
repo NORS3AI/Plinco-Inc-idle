@@ -48,20 +48,20 @@
   const WALL_RESTITUTION = 0.85;  // side walls — extra bouncy
   const MOVER_LEN = 70;           // moving bar length
   const MOVER_T = 7;              // moving bar thickness
-  // Each bar moves independently across the board for chaos.
+  // Each bar moves independently across the board (its own fixed speed).
   const movers = Array.from({ length: 5 }, (_, i) => ({
-    x: W / 2,
-    vx: (90 + i * 35 + Math.random() * 90) * (Math.random() < 0.5 ? -1 : 1),
+    x: MOVER_LEN / 2 + Math.random() * (W - MOVER_LEN),
+    dir: Math.random() < 0.5 ? -1 : 1,
+    speed: 90 + i * 30 + Math.random() * 80,
+    vx: 0,
   }));
   const BASE_RECHARGE_S = 3.0;
-  const QUEUE_INTERVAL_MS = 1000;
 
   // ---- State ----
   const defaultUpg = () => ({
     chamberValue: 0,
     crit: 0,
     recharge: 0,
-    queue: 0,
     rows: 0,        // 0..4  -> rows = 2 + rows  (board 2..6)
     movers: 0,      // 0..5  -> moving bars between rows
     randomDrop: 0,  // 0/1   -> random "rain" drop instead of dead center
@@ -89,8 +89,6 @@
     cooldown: 0,
     balls: [],
     floaters: [],
-    queue: 0,
-    queueTimer: 0,
     upg: defaultUpg(),
     settings: defaultSettings(),
     seen: {},   // upgrade ids the player has viewed in the menu
@@ -200,7 +198,6 @@
   function rechargeCost(level) { return 250 + 500 * level; }
   function cooldownMs() { return rechargeSeconds() * 1000; }
 
-  const QUEUE_MAX_LEVEL = 10;
   const ROWS_MAX_LEVEL = 4; // adds rows 3..6 (board 2..6)
 
   // ---- Persistence ----
@@ -284,12 +281,6 @@
       buy() { state.upg.recharge++; },
     },
     {
-      id: 'queue', name: 'Ball Queue', unlockAt: 150, maxLevel: QUEUE_MAX_LEVEL,
-      level: () => state.upg.queue, cost: () => 200,
-      desc: () => `Bank taps during cooldown (cap ${state.upg.queue}/${QUEUE_MAX_LEVEL}); 1 drops per second.`,
-      buy() { state.upg.queue++; },
-    },
-    {
       id: 'randomDrop', name: 'Random Rain Drop', unlockAt: 500, maxLevel: 1,
       level: () => state.upg.randomDrop, cost: () => 500,
       desc: () => state.upg.randomDrop >= 1
@@ -310,7 +301,7 @@
       cost: () => [1000, 10000, 100000, 1000000, 1000000000][state.upg.movers],
       desc: () => {
         const next = state.upg.movers + 1;
-        return `Bar ${next}/5: a short bar between rows ${next} and ${next + 1} that slides back & forth — balls bounce off it. Each moves on its own for chaos.`;
+        return `${next} moving bar${next === 1 ? '' : 's'} (lv ${next}/5): short bars that slide across the board — balls bounce off them. Each moves on its own at its own speed.`;
       },
       buy() { state.upg.movers++; },
     },
@@ -545,8 +536,6 @@
     if (state.cooldown <= 0) {
       dropBall();
       state.cooldown = cooldownMs();
-    } else if (state.upg.queue > 0 && state.queue < state.upg.queue) {
-      state.queue++;
     }
   });
 
@@ -567,14 +556,18 @@
     sfx('drop');
   }
 
-  // Active moving bars with their current y (between the relevant rows).
+  // Upgrade level = number of bars. They sit at evenly-spaced, distinct
+  // heights across the peg field so they never intersect each other.
   function moverList() {
     if (!LO) return [];
-    const ys = LO.rowYs, R = ys.length, owned = state.upg.movers, list = [];
-    for (let m = 1; m <= owned && m <= 5; m++) {
-      if (R < m + 1) continue;            // bar m sits between row m and row m+1
-      const y = (ys[m - 1] + ys[m]) / 2;
-      list.push({ y, mv: movers[m - 1] });
+    const owned = Math.min(5, state.upg.movers);
+    if (owned <= 0) return [];
+    const top = LO.rowYs[0] + 22;             // just below the first row
+    const bot = LO.chamberTop - 16;           // just above the chamber slot
+    const list = [];
+    for (let i = 0; i < owned; i++) {
+      const y = top + ((i + 1) / (owned + 1)) * (bot - top);
+      list.push({ y, mv: movers[i] });
     }
     return list;
   }
@@ -588,28 +581,19 @@
       state.cooldown = cooldownMs();
     }
 
-    if (state.upg.queue > 0 && state.queue > 0) {
-      state.queueTimer += dt * 1000;
-      if (state.queueTimer >= QUEUE_INTERVAL_MS) {
-        state.queueTimer -= QUEUE_INTERVAL_MS;
-        state.queue--;
-        dropBall();
-      }
-    } else {
-      state.queueTimer = 0;
-    }
-
-    // Move every bar independently; bounce off the edges with a random tweak.
+    // Each bar keeps its set speed, easing down near a wall (never bouncing),
+    // reversing at the wall, then returning to full speed away from it.
     const half = MOVER_LEN / 2;
+    const minX = half, maxX = W - half;
+    const EASE_MARGIN = 70, MIN_FACTOR = 0.3;
     for (const mv of movers) {
+      const distToWall = mv.dir > 0 ? (maxX - mv.x) : (mv.x - minX);
+      const factor = MIN_FACTOR +
+        (1 - MIN_FACTOR) * Math.min(1, Math.max(0, distToWall) / EASE_MARGIN);
+      mv.vx = mv.dir * mv.speed * factor;
       mv.x += mv.vx * dt;
-      if (mv.x < half) {
-        mv.x = half;
-        mv.vx = Math.abs(mv.vx) * (0.85 + Math.random() * 0.5);
-      } else if (mv.x > W - half) {
-        mv.x = W - half;
-        mv.vx = -Math.abs(mv.vx) * (0.85 + Math.random() * 0.5);
-      }
+      if (mv.x <= minX) { mv.x = minX; mv.dir = 1; }
+      else if (mv.x >= maxX) { mv.x = maxX; mv.dir = -1; }
     }
     const activeMovers = moverList();
 
@@ -748,17 +732,6 @@
     ctx.lineWidth = 1;
     ctx.strokeStyle = '#3a4060';
     roundRect(ctx, BAR.x, BAR.y, BAR.w, BAR.h, 5); ctx.stroke();
-
-    if (state.upg.queue > 0) {
-      const pipR = 4, gap = 12;
-      let px = W / 2 - (state.upg.queue * gap) / 2 + gap / 2;
-      const py = BAR.y + BAR.h + 8;
-      for (let i = 0; i < state.upg.queue; i++) {
-        ctx.beginPath(); ctx.arc(px, py, pipR, 0, Math.PI * 2);
-        ctx.fillStyle = i < state.queue ? '#f5c842' : '#2a2f4d';
-        ctx.fill(); px += gap;
-      }
-    }
     ctx.restore();
   }
 
