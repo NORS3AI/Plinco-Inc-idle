@@ -115,7 +115,7 @@
     mute: false,
     gapToSlot: 125,
     entryGap: 100,
-    bonusFlank: 19,
+    bonusFlank: 32,
   });
 
   const defaultVpUpg = () => ({
@@ -733,7 +733,7 @@
     save();
   });
   dbgFlank.addEventListener('input', () => {
-    const v = Math.max(10, Math.min(1000, parseInt(dbgFlank.value, 10) || 19));
+    const v = Math.max(10, Math.min(1000, parseInt(dbgFlank.value, 10) || 32));
     state.settings.bonusFlank = v;
     dbgFlankVal.textContent = v + 'px';
     save();
