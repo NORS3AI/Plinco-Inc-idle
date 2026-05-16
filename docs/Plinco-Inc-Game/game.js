@@ -962,6 +962,15 @@
     const now = performance.now();
     const grav = now < gravityLowUntil ? GRAVITY * 0.5 : GRAVITY;
 
+    // Spinning triangle pegs: precompute this frame's 3 vertex directions.
+    const spinning = state.upg.pegSpin >= 1;
+    const sAng = spinning ? pegSpinAngle() : 0;
+    const vertDirs = spinning ? [
+      -Math.PI / 2 + sAng,
+      Math.atan2(0.85, 1) + sAng,
+      Math.atan2(0.85, -1) + sAng,
+    ] : null;
+
     for (const b of state.balls) {
       if (b.done) continue;
       b.age += dt;
@@ -979,11 +988,38 @@
           b.x = p.x + nx * md;
           b.y = p.y + ny * md;
           const vn = b.vx * nx + b.vy * ny;
-          if (vn < 0) {
-            b.vx -= (1 + RESTITUTION) * vn * nx;
-            b.vy -= (1 + RESTITUTION) * vn * ny;
+
+          if (spinning) {
+            const ca = Math.atan2(dy, dx);
+            let nearest = Infinity;
+            for (const va of vertDirs) {
+              let a = ca - va;
+              a = Math.atan2(Math.sin(a), Math.cos(a));
+              if (Math.abs(a) < nearest) nearest = Math.abs(a);
+            }
+            if (nearest < 0.5) {
+              // hit near a point/vertex -> bounce high
+              if (vn < 0) {
+                b.vx -= (1 + 1.05) * vn * nx;
+                b.vy -= (1 + 1.05) * vn * ny;
+              }
+              b.vy -= 240;                       // launch upward
+              b.vx += (Math.random() - 0.5) * 40;
+            } else {
+              // hit a flat face -> veer randomly left or right
+              if (vn < 0) {
+                b.vx -= (1 + 0.4) * vn * nx;
+                b.vy -= (1 + 0.4) * vn * ny;
+              }
+              b.vx = (Math.random() < 0.5 ? -1 : 1) * (150 + Math.random() * 140);
+            }
+          } else {
+            if (vn < 0) {
+              b.vx -= (1 + RESTITUTION) * vn * nx;
+              b.vy -= (1 + RESTITUTION) * vn * ny;
+            }
+            b.vx += (Math.random() - 0.5) * 60;
           }
-          b.vx += (Math.random() - 0.5) * 60;
         }
       }
 
