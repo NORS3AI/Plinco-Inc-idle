@@ -140,7 +140,7 @@
   function chamberW()     { return W / chamberCount(); }
 
   function chamberMultiplier() { return Math.pow(2, state.upg.chamberValue); }
-  function tinyValueMult() { return Math.pow(10, state.upg.tinyValue); }
+  function tinyValueMult() { return Math.pow(4, state.upg.tinyValue); }
   const TINY_VALUE_COSTS = [50000, 500000, 5000000, 5000000000, 1000000000000];
   function chamberValueCost(level) {
     if (level === 0) return 10;
@@ -224,12 +224,12 @@
   // ---- Colored balls (independent rolls, highest tier wins) ----
   const BALL_TIERS = [
     { id: 'ballGold',    name: 'Gold',    mult: 2,  chance: 0.20, color: '#f5c842' },
-    { id: 'ballGreen',   name: 'Green',   mult: 5,  chance: 0.15, color: '#4fdc6a' },
-    { id: 'ballBlue',    name: 'Blue',    mult: 8,  chance: 0.12, color: '#4f9fff' },
-    { id: 'ballRed',     name: 'Red',     mult: 12, chance: 0.10, color: '#ff5a5a' },
-    { id: 'ballOrange',  name: 'Orange',  mult: 15, chance: 0.07, color: '#ff9b3d' },
-    { id: 'ballPink',    name: 'Pink',    mult: 20, chance: 0.05, color: '#ff7ad9' },
-    { id: 'ballRainbow', name: 'Rainbow', mult: 25, chance: 0.02, color: 'rainbow' },
+    { id: 'ballGreen',   name: 'Green',   mult: 3,  chance: 0.15, color: '#4fdc6a' },
+    { id: 'ballBlue',    name: 'Blue',    mult: 4,  chance: 0.12, color: '#4f9fff' },
+    { id: 'ballRed',     name: 'Red',     mult: 5,  chance: 0.10, color: '#ff5a5a' },
+    { id: 'ballOrange',  name: 'Orange',  mult: 7,  chance: 0.07, color: '#ff9b3d' },
+    { id: 'ballPink',    name: 'Pink',    mult: 9,  chance: 0.05, color: '#ff7ad9' },
+    { id: 'ballRainbow', name: 'Rainbow', mult: 12, chance: 0.02, color: 'rainbow' },
   ];
 
   function rollBall() {
@@ -305,12 +305,12 @@
 
   // ---- Prestige / Void Points ----
   function startingGold() { return state.vpUpg.startGold * 10; }
-  function reqPerVP() {
-    return Math.max(10000, Math.round(1e6 * Math.pow(0.9, state.vpUpg.discount)));
-  }
+  // Logarithmic VP: ~1 at 1M, ~3 at 1T, ~4 at 1Qi. Discount lowers the divisor.
+  function vpDivisor() { return Math.max(2, 4 - 0.2 * state.vpUpg.discount); }
   function vpEarnMult() { return 1 + 0.25 * state.vpUpg.earnRate; }
   function vpGain() {
-    return Math.floor((state.maxGold / reqPerVP()) * vpEarnMult());
+    const g = Math.max(1, state.maxGold);
+    return Math.floor((Math.log10(g) / vpDivisor()) * vpEarnMult());
   }
   function checkPrestigeUnlock() {
     if (!state.prestigeUnlocked && state.upg.rows >= ROWS_MAX_LEVEL) {
@@ -366,7 +366,7 @@
 
   const UPGRADES = [
     {
-      id: 'chamberValue', name: 'Chamber Value x2', unlockAt: 10, maxLevel: 50,
+      id: 'chamberValue', name: 'Chamber Value x2', unlockAt: 10, maxLevel: 12,
       level: () => state.upg.chamberValue,
       cost: () => chamberValueCost(state.upg.chamberValue),
       desc: () => `Doubles every chamber payout (compounding). Now x${fmt(chamberMultiplier())}.`,
@@ -410,7 +410,7 @@
       id: 'tinyValue', name: 'Bonus Peg Value', unlockAt: 50000, maxLevel: 5,
       level: () => state.upg.tinyValue,
       cost: () => TINY_VALUE_COSTS[state.upg.tinyValue],
-      desc: () => `Bonus pegs are worth x10 more per level. Now x${fmt(tinyValueMult())}. Lv ${state.upg.tinyValue}/5.`,
+      desc: () => `Bonus pegs are worth x4 more per level. Now x${fmt(tinyValueMult())}. Lv ${state.upg.tinyValue}/5.`,
       buy() { state.upg.tinyValue++; },
     },
     {
@@ -574,10 +574,10 @@
       buy() { state.vpUpg.earnRate++; },
     },
     {
-      id: 'discount', name: 'Prestige Discount', max: 10,
+      id: 'discount', name: 'Prestige Yield', max: 10,
       level: () => state.vpUpg.discount,
       cost: () => 3 * Math.pow(2, state.vpUpg.discount),
-      desc: () => `Gold needed per VP x0.9 per level. Now ${fmt(reqPerVP())}g/VP. Lv ${state.vpUpg.discount}/10.`,
+      desc: () => `Lowers the VP divisor (more VP per prestige). Now ÷${vpDivisor().toFixed(1)}. Lv ${state.vpUpg.discount}/10.`,
       buy() { state.vpUpg.discount++; },
     },
     {
@@ -606,7 +606,7 @@
     const gain = vpGain();
     prestigeBtn.textContent = gain > 0
       ? `Prestige  (+${fmt(gain)} VP)`
-      : `Prestige  (need ${fmt(reqPerVP())}g)`;
+      : `Prestige  (earn more gold)`;
     prestigeBtn.disabled = gain <= 0;
     vpList.innerHTML = '';
     for (const u of VP_UPGRADES) {
