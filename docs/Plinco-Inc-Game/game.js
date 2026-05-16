@@ -89,8 +89,9 @@
     crit: 0,
     recharge: 0,
     rows: 0,        // 0..4  -> rows = 2 + rows  (board 2..6)
-    tinyPegs: 0,    // 0..5  -> bonus pegs per gap
-    tinyValue: 0,   // 0..5  -> bonus peg worth x10 per level
+    tinyPegs: 0,    // 0..5  -> bonus pegs per side per big peg
+    tinyWorth: 0,   // 0..25 -> +2 flat bonus peg gold per level (cap +50)
+    tinyValue: 0,   // 0..5  -> bonus peg worth x4 per level
     movers: 0,      // 0..5  -> moving bars between rows
     randomDrop: 0,  // 0/1   -> random "rain" drop instead of dead center
     upgradeAll: 0,  // 0/1   -> unlocks the Upgrade All button
@@ -141,6 +142,7 @@
 
   function chamberMultiplier() { return Math.pow(2, state.upg.chamberValue); }
   function tinyValueMult() { return Math.pow(4, state.upg.tinyValue); }
+  function tinyWorthAdd() { return 2 * state.upg.tinyWorth; }  // +2/level, cap +50
   const TINY_VALUE_COSTS = [50000, 500000, 5000000, 5000000000, 1000000000000];
   function chamberValueCost(level) {
     if (level === 0) return 10;
@@ -185,23 +187,33 @@
       }
     }
 
-    // Bonus (tiny) pegs: L per gap, between & outside the big pegs on each row.
+    // Bonus (tiny) pegs: flank each big peg closely on both sides, where a
+    // glancing ball actually travels. Level L = L pegs per side per big peg.
     const tinies = [];
     const L = state.upg.tinyPegs;
     if (L > 0) {
       const tr = PEG_R * TINY_SCALE;
+      const base = PEG_R + tr + 6;          // "pretty close" to the big peg
+      const step = tr * 4 + 5;
+      const minGapBig = PEG_R + tr + 3;
       for (let k = 1; k <= R; k++) {
         const y = rowYs[k - 1];
         const xs = [];
         for (let j = 0; j < k; j++) xs.push(W / 2 + (j - (k - 1) / 2) * spacing);
-        const regions = [[xs[0] - spacing, xs[0]]];
-        for (let j = 0; j < k - 1; j++) regions.push([xs[j], xs[j + 1]]);
-        regions.push([xs[k - 1], xs[k - 1] + spacing]);
-        regions.forEach((reg, ri) => {
-          for (let t = 0; t < L; t++) {
-            const x = reg[0] + ((t + 1) / (L + 1)) * (reg[1] - reg[0]);
-            if (x < tr + 2 || x > W - tr - 2) continue;
-            tinies.push({ x, y, r: tr, id: `${k}:${ri}:${t}` });
+        xs.forEach((bx, bi) => {
+          for (let i = 0; i < L; i++) {
+            const off = base + i * step;
+            for (const s of [-1, 1]) {
+              const x = bx + s * off;
+              if (x < tr + 2 || x > W - tr - 2) continue;
+              // don't sit on top of another big peg
+              let clash = false;
+              for (const xb of xs) {
+                if (xb !== bx && Math.abs(x - xb) < minGapBig) { clash = true; break; }
+              }
+              if (clash) continue;
+              tinies.push({ x, y, r: tr, id: `${k}:${bi}:${s < 0 ? 'L' : 'R'}:${i}` });
+            }
           }
         });
       }
@@ -400,11 +412,18 @@
       buy() { state.upg.rows++; },
     },
     {
-      id: 'tinyPegs', name: 'Bonus Pegs', unlockAt: 100, maxLevel: 5,
+      id: 'tinyPegs', name: 'Bonus Pegs', unlockAt: 75, maxLevel: 5,
       level: () => state.upg.tinyPegs,
       cost: () => 100 * Math.pow(2, state.upg.tinyPegs),
-      desc: () => `Adds small bonus pegs between & beside the pegs. Green = 1–3g, red = 4–5g; vanish 5s when struck. Lv ${state.upg.tinyPegs}/5.`,
+      desc: () => `Adds bonus pegs flanking each peg where balls glance off. Green = 1–3g, red = 4–5g; vanish 5s when struck. Lv ${state.upg.tinyPegs}/5.`,
       buy() { state.upg.tinyPegs++; },
+    },
+    {
+      id: 'tinyWorth', name: 'Bonus Peg Worth', unlockAt: 175, maxLevel: 25,
+      level: () => state.upg.tinyWorth,
+      cost: () => 200 * Math.pow(2, state.upg.tinyWorth),
+      desc: () => `+2 gold per bonus peg per level (cap +50). Now +${tinyWorthAdd()}g. Lv ${state.upg.tinyWorth}/25.`,
+      buy() { state.upg.tinyWorth++; },
     },
     {
       id: 'tinyValue', name: 'Bonus Peg Value', unlockAt: 50000, maxLevel: 5,
@@ -947,7 +966,7 @@
             b.vy -= (1 + RESTITUTION) * vn * ny;
           }
           b.vx += (Math.random() - 0.5) * 70;
-          const g = meta.gold * tinyValueMult();
+          const g = (meta.gold + tinyWorthAdd()) * tinyValueMult();
           addGold(g);
           state.floaters.push({
             x: tp.x, y: tp.y - 8,
