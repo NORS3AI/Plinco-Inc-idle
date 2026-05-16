@@ -629,7 +629,7 @@
       else {
         btn.textContent = fmt(u.cost()) + ' VP';
         btn.disabled = state.vp < u.cost();
-        btn.addEventListener('click', () => buyVp(u));
+        btn.addEventListener('pointerup', (e) => { e.preventDefault(); buyVp(u); });
       }
       row.appendChild(info); row.appendChild(btn);
       vpList.appendChild(row);
@@ -714,15 +714,23 @@
     return str + UNITS_LC[tier];
   }
 
+  let panelRows = [];   // [{ u, btn, descEl, lvlEl }]
+  let panelSig = '';
+  function currentSig() {
+    return (state.upg.upgradeAll >= 1 ? 'A|' : '') +
+      visibleUpgrades().map(u => u.id + (u.level() >= u.maxLevel ? 'M' : '')).join(',');
+  }
+
   function renderPanel() {
     if (!panelOpen) return;
     upgradeList.innerHTML = '';
+    panelRows = [];
 
     if (state.upg.upgradeAll >= 1) {
       const allBtn = document.createElement('button');
       allBtn.className = 'buy-btn upgrade-all-btn';
       allBtn.textContent = 'Upgrade All (spend all gold)';
-      allBtn.addEventListener('click', doUpgradeAll);
+      allBtn.addEventListener('pointerup', (e) => { e.preventDefault(); doUpgradeAll(); });
       upgradeList.appendChild(allBtn);
     }
 
@@ -733,6 +741,7 @@
       p.style.cssText = 'padding:20px;text-align:center';
       p.textContent = 'Earn more gold to unlock upgrades.';
       upgradeList.appendChild(p);
+      panelSig = currentSig();
       return;
     }
     for (const u of visible) {
@@ -746,14 +755,11 @@
       const name = document.createElement('div');
       name.className = 'upg-name';
       name.textContent = u.name;
-      if (u.maxLevel === Infinity) {
-        const ls = document.createElement('span');
-        ls.className = 'lvl'; ls.textContent = `Lv ${lvl}`;
-        name.appendChild(ls);
-      } else if (u.maxLevel > 1) {
-        const ls = document.createElement('span');
-        ls.className = 'lvl'; ls.textContent = `Lv ${lvl}/${u.maxLevel}`;
-        name.appendChild(ls);
+      let lvlEl = null;
+      if (u.maxLevel > 1 && u.maxLevel !== Infinity) {
+        lvlEl = document.createElement('span');
+        lvlEl.className = 'lvl'; lvlEl.textContent = `Lv ${lvl}/${u.maxLevel}`;
+        name.appendChild(lvlEl);
       }
       const desc = document.createElement('div');
       desc.className = 'upg-desc';
@@ -770,14 +776,33 @@
       } else {
         btn.textContent = fmt(u.cost()) + 'g';
         btn.disabled = state.gold < u.cost();
-        btn.addEventListener('click', () => purchase(u));
+        btn.addEventListener('pointerup', (e) => { e.preventDefault(); purchase(u); });
       }
       row.appendChild(info);
       row.appendChild(btn);
       upgradeList.appendChild(row);
+      panelRows.push({ u, btn, descEl: desc, lvlEl });
+    }
+    panelSig = currentSig();
+  }
+
+  // Lightweight tick: rebuild only if composition changed, else update in place
+  // (so a button is never destroyed under the player's finger).
+  function refreshPanel() {
+    if (!panelOpen) return;
+    if (currentSig() !== panelSig) { renderPanel(); return; }
+    for (const r of panelRows) {
+      const u = r.u;
+      r.descEl.textContent = u.desc();
+      if (r.lvlEl) r.lvlEl.textContent = `Lv ${u.level()}/${u.maxLevel}`;
+      if (!r.btn.classList.contains('maxed')) {
+        const c = u.cost();
+        r.btn.textContent = fmt(c) + 'g';
+        r.btn.disabled = state.gold < c;
+      }
     }
   }
-  setInterval(() => { if (panelOpen) renderPanel(); }, 300);
+  setInterval(refreshPanel, 300);
 
   // ---- Input ----
   function canvasPoint(e) {
