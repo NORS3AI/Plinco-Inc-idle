@@ -36,6 +36,9 @@
   const dbgFlank = document.getElementById('dbgFlank');
   const dbgFlankVal = document.getElementById('dbgFlankVal');
   const dbgReset = document.getElementById('dbgReset');
+  const devLock = document.getElementById('devLock');
+  const devUnlockBtn = document.getElementById('devUnlockBtn');
+  const debugSection = document.getElementById('debugSection');
 
   // ---- Layout ----
   const COIN = { x: W / 2, y: 64, r: 30 };
@@ -116,6 +119,7 @@
     gapToSlot: 125,
     entryGap: 100,
     bonusFlank: 32,
+    devUnlocked: false,
   });
 
   const defaultVpUpg = () => ({
@@ -595,6 +599,9 @@
     dbgFlank.value = String(state.settings.bonusFlank);
     dbgFlankVal.textContent = state.settings.bonusFlank + 'px';
     dbgGoldNow.textContent = fmt(state.gold) + 'g';
+    const unlocked = !!state.settings.devUnlocked;
+    debugSection.hidden = !unlocked;
+    devLock.hidden = unlocked;
   }
   function openSettings() {
     settingsOverlay.hidden = false;
@@ -742,6 +749,17 @@
     if (!confirm('Delete your game and start completely over? This cannot be undone.')) return;
     try { localStorage.removeItem(SAVE_KEY); } catch {}
     location.reload();
+  });
+  devUnlockBtn.addEventListener('click', () => {
+    const pw = prompt("Developer's Kitchen — enter password:");
+    if (pw === null) return;
+    if (pw.trim() === '1337') {
+      state.settings.devUnlocked = true;
+      save();
+      syncSettingsUI();
+    } else {
+      alert('Incorrect password.');
+    }
   });
 
   const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc',

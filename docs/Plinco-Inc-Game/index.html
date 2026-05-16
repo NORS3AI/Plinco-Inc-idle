@@ -77,39 +77,47 @@
           <button id="setMute" class="toggle" role="switch"></button>
         </div>
 
-        <div class="section-label">Debug</div>
-        <div class="set-row set-col">
-          <div class="set-slider-head">
-            <span class="set-label">Add gold</span>
-            <span id="dbgGoldNow" class="set-val">0g</span>
-          </div>
-          <div class="dbg-btns">
-            <button id="dbgGold100" class="buy-btn">+100</button>
-            <button id="dbgGold500" class="buy-btn">+500</button>
-            <button id="dbgGold1k" class="buy-btn">+1K</button>
-            <button id="dbgGold10k" class="buy-btn">+10K</button>
-          </div>
+        <div class="section-label">Developer's Kitchen</div>
+        <div id="devLock" class="set-row">
+          <span class="set-label">Restricted access</span>
+          <button id="devUnlockBtn" class="buy-btn">Enter password</button>
         </div>
-        <div class="set-row set-col">
-          <div class="set-slider-head">
-            <span class="set-label">Drop &rarr; row 1 gap</span>
-            <span id="dbgEntryVal" class="set-val">100px</span>
+
+        <div id="debugSection" hidden>
+          <div class="section-label">Debug</div>
+          <div class="set-row set-col">
+            <div class="set-slider-head">
+              <span class="set-label">Add gold</span>
+              <span id="dbgGoldNow" class="set-val">0g</span>
+            </div>
+            <div class="dbg-btns">
+              <button id="dbgGold100" class="buy-btn">+100</button>
+              <button id="dbgGold500" class="buy-btn">+500</button>
+              <button id="dbgGold1k" class="buy-btn">+1K</button>
+              <button id="dbgGold10k" class="buy-btn">+10K</button>
+            </div>
           </div>
-          <input id="dbgEntry" class="slider" type="range" min="12" max="1000" step="1" value="100">
-        </div>
-        <div class="set-row set-col">
-          <div class="set-slider-head">
-            <span class="set-label">Last row &rarr; chamber gap</span>
-            <span id="dbgGapVal" class="set-val">125px</span>
+          <div class="set-row set-col">
+            <div class="set-slider-head">
+              <span class="set-label">Drop &rarr; row 1 gap</span>
+              <span id="dbgEntryVal" class="set-val">100px</span>
+            </div>
+            <input id="dbgEntry" class="slider" type="range" min="12" max="1000" step="1" value="100">
           </div>
-          <input id="dbgGap" class="slider" type="range" min="12" max="1000" step="1" value="125">
-        </div>
-        <div class="set-row set-col">
-          <div class="set-slider-head">
-            <span class="set-label">Bonus peg flank px</span>
-            <span id="dbgFlankVal" class="set-val">32px</span>
+          <div class="set-row set-col">
+            <div class="set-slider-head">
+              <span class="set-label">Last row &rarr; chamber gap</span>
+              <span id="dbgGapVal" class="set-val">125px</span>
+            </div>
+            <input id="dbgGap" class="slider" type="range" min="12" max="1000" step="1" value="125">
           </div>
-          <input id="dbgFlank" class="slider" type="range" min="10" max="1000" step="1" value="32">
+          <div class="set-row set-col">
+            <div class="set-slider-head">
+              <span class="set-label">Bonus peg flank px</span>
+              <span id="dbgFlankVal" class="set-val">32px</span>
+            </div>
+            <input id="dbgFlank" class="slider" type="range" min="10" max="1000" step="1" value="32">
+          </div>
         </div>
 
         <div class="section-label">Game</div>
