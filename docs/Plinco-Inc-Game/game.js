@@ -89,6 +89,8 @@
     crit: 0,
     recharge: 0,
     rows: 0,        // 0..4  -> rows = 2 + rows  (board 2..6)
+    pegSpin: 0,     // 0/1   -> main pegs spin (cosmetic)
+    pegSpinSpeed: 0,// 0..7  -> spin speed boost
     tinyPegs: 0,    // 0..5  -> bonus pegs per side per big peg
     tinyWorth: 0,   // 0..25 -> +2 flat bonus peg gold per level (cap +50)
     tinyValue: 0,   // 0..5  -> bonus peg worth x4 per level
@@ -141,6 +143,16 @@
   function chamberW()     { return W / chamberCount(); }
 
   function chamberMultiplier() { return Math.pow(2, state.upg.chamberValue); }
+  // Cosmetic peg spin (independent of game state/speed).
+  const BASE_SPIN = 0.7; // rad/s
+  function pegSpinSpeedMult() {
+    const L = state.upg.pegSpinSpeed;
+    return L <= 0 ? 1 : 1 + 0.10 + 0.05 * (L - 1);
+  }
+  function pegSpinAngle() {
+    if (state.upg.pegSpin < 1) return 0;
+    return (performance.now() / 1000) * BASE_SPIN * pegSpinSpeedMult();
+  }
   function tinyValueMult() { return Math.pow(4, state.upg.tinyValue); }
   function tinyWorthAdd() { return 2 * state.upg.tinyWorth; }  // +2/level, cap +50
   const TINY_VALUE_COSTS = [50000, 500000, 5000000, 5000000000, 1000000000000];
@@ -410,6 +422,21 @@
       cost: () => 1000 * Math.pow(10, state.upg.rows),
       desc: () => `Board: ${chamberCount()} rows. Adds row ${chamberCount() + 1} (+1 chamber, max 6 rows).`,
       buy() { state.upg.rows++; },
+    },
+    {
+      id: 'pegSpin', name: 'Spinning Pegs', unlockAt: 5, maxLevel: 1,
+      level: () => state.upg.pegSpin, cost: () => 20,
+      desc: () => state.upg.pegSpin >= 1
+        ? 'All main pegs slowly spin.'
+        : 'All main pegs slowly spin in place (cosmetic).',
+      buy() { state.upg.pegSpin = 1; },
+    },
+    {
+      id: 'pegSpinSpeed', name: 'Peg Spin Speed', unlockAt: 200, maxLevel: 7,
+      level: () => state.upg.pegSpinSpeed,
+      cost: () => 250 * Math.pow(2, state.upg.pegSpinSpeed),
+      desc: () => `Speeds up peg spin (+10% then +5%/level). Now +${Math.round((pegSpinSpeedMult() - 1) * 100)}%. Lv ${state.upg.pegSpinSpeed}/7.`,
+      buy() { state.upg.pegSpinSpeed++; },
     },
     {
       id: 'tinyPegs', name: 'Bonus Pegs', unlockAt: 75, maxLevel: 5,
@@ -1128,14 +1155,19 @@
     const { pegs, tinies, n, cw, values, chamberTop, floorY } = LO;
     const now = performance.now();
 
+    const spin = pegSpinAngle();
     for (const p of pegs) {
-      const g = ctx.createLinearGradient(p.x, p.y - PEG_R, p.x, p.y + PEG_R);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      if (spin) ctx.rotate(spin);
+      const g = ctx.createLinearGradient(0, -PEG_R, 0, PEG_R);
       g.addColorStop(0, '#ffffff');
       g.addColorStop(1, '#8a92b8');
       ctx.fillStyle = g;
-      triPath(p.x, p.y, PEG_R); ctx.fill();
+      triPath(0, 0, PEG_R); ctx.fill();
       ctx.strokeStyle = '#4a517a';
       ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
     }
 
     for (const tp of tinies) {
