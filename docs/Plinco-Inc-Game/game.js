@@ -33,6 +33,8 @@
   const dbgGapVal = document.getElementById('dbgGapVal');
   const dbgEntry = document.getElementById('dbgEntry');
   const dbgEntryVal = document.getElementById('dbgEntryVal');
+  const dbgFlank = document.getElementById('dbgFlank');
+  const dbgFlankVal = document.getElementById('dbgFlankVal');
   const dbgReset = document.getElementById('dbgReset');
 
   // ---- Layout ----
@@ -113,6 +115,7 @@
     mute: false,
     gapToSlot: 125,
     entryGap: 100,
+    bonusFlank: 19,
   });
 
   const defaultVpUpg = () => ({
@@ -205,7 +208,7 @@
     const L = state.upg.tinyPegs;
     if (L > 0) {
       const tr = PEG_R * TINY_SCALE;
-      const base = PEG_R + tr + 6;          // "pretty close" to the big peg
+      const base = state.settings.bonusFlank;  // tunable flank distance
       const step = tr * 4 + 5;
       const minGapBig = PEG_R + tr + 3;
       for (let k = 1; k <= R; k++) {
@@ -589,6 +592,8 @@
     dbgGapVal.textContent = state.settings.gapToSlot + 'px';
     dbgEntry.value = String(state.settings.entryGap);
     dbgEntryVal.textContent = state.settings.entryGap + 'px';
+    dbgFlank.value = String(state.settings.bonusFlank);
+    dbgFlankVal.textContent = state.settings.bonusFlank + 'px';
     dbgGoldNow.textContent = fmt(state.gold) + 'g';
   }
   function openSettings() {
@@ -725,6 +730,12 @@
     const v = Math.max(12, Math.min(1000, parseInt(dbgEntry.value, 10) || 100));
     state.settings.entryGap = v;
     dbgEntryVal.textContent = v + 'px';
+    save();
+  });
+  dbgFlank.addEventListener('input', () => {
+    const v = Math.max(10, Math.min(1000, parseInt(dbgFlank.value, 10) || 19));
+    state.settings.bonusFlank = v;
+    dbgFlankVal.textContent = v + 'px';
     save();
   });
   dbgReset.addEventListener('click', () => {
