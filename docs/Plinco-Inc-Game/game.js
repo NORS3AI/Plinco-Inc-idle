@@ -43,6 +43,8 @@
   // ---- Layout ----
   const COIN = { x: W / 2, y: 64, r: 30 };
   const BAR  = { x: (W - 200) / 2, y: COIN.y + COIN.r + 6, w: 200, h: 10 };
+  const CEIL_Y = 22;              // solid ceiling above the coin (no escapes)
+  const CEIL_TOOTH = 26;          // decorative triangle width
 
   const PEG_R = 10.5;  // 7 * 1.5
   const SPAWN_Y = BAR.y + BAR.h + 24; // ball drop point (clear of bar + pips)
@@ -1202,6 +1204,10 @@
 
       if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * WALL_RESTITUTION; }
       if (b.x + BALL_R > W) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * WALL_RESTITUTION; }
+      if (b.y - BALL_R < CEIL_Y) {
+        b.y = CEIL_Y + BALL_R;
+        if (b.vy < 0) b.vy = -b.vy * WALL_RESTITUTION;
+      }
 
       // Score the instant the ball enters the slot (or if it ever gets stuck)
       if (!b.done && (b.y + BALL_R >= chamberTop || b.age > 14)) {
@@ -1438,6 +1444,28 @@
     ctx.closePath();
   }
 
+  function drawCeiling() {
+    ctx.fillStyle = '#0e1122';
+    ctx.fillRect(0, 0, W, CEIL_Y);
+    const cols = Math.ceil(W / CEIL_TOOTH);
+    for (let i = 0; i < cols; i++) {
+      const x0 = i * CEIL_TOOTH;
+      const g = ctx.createLinearGradient(0, 0, 0, CEIL_Y);
+      g.addColorStop(0, '#9aa0c8');
+      g.addColorStop(1, '#5a6090');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(x0, 0);
+      ctx.lineTo(x0 + CEIL_TOOTH, 0);
+      ctx.lineTo(x0 + CEIL_TOOTH / 2, CEIL_Y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#3a4070';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
   function render() {
     ctx.clearRect(0, 0, W, H);
     drawCoin();
@@ -1445,6 +1473,7 @@
     drawBoard();
     drawBalls();
     drawFloaters();
+    drawCeiling();
   }
 
   function syncHud() {
