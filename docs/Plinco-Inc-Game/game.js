@@ -56,6 +56,9 @@
 
   let LO = null;                 // current frame's board layout
   const LOW_GRAV_FACTOR = 0.1;   // moon gravity (per-ball) after a top-of-bar hit
+  let goldPegIdx = -1;           // which spinning peg is currently gold
+  let goldPegEndsAt = 0;
+  let goldPegNextAt = 0;
 
   const BALL_R = 8;
   const GRAVITY = 700;
@@ -1095,11 +1098,26 @@
       Math.atan2(0.85, -1) + sAng,
     ] : null;
 
+    // Random gold peg among the spinning pegs.
+    if (spinning && pegs.length) {
+      if (goldPegIdx < 0 && now >= goldPegNextAt) {
+        goldPegIdx = Math.floor(Math.random() * pegs.length);
+        goldPegEndsAt = now + 5000;
+      } else if (goldPegIdx >= 0 && now >= goldPegEndsAt) {
+        goldPegIdx = -1;
+        goldPegNextAt = now + 4000 + Math.random() * 6000;
+      }
+    } else {
+      goldPegIdx = -1;
+    }
+    const goldPeg = (goldPegIdx >= 0 && goldPegIdx < pegs.length) ? pegs[goldPegIdx] : null;
+
     for (const b of state.balls) {
       if (b.done) continue;
       b.age += dt;
-      const grav = (b.lowGravUntil && now < b.lowGravUntil)
-        ? GRAVITY * LOW_GRAV_FACTOR : GRAVITY;
+      const speedActive = b.speedUntil && now < b.speedUntil;
+      const moonActive = !speedActive && b.lowGravUntil && now < b.lowGravUntil;
+      const grav = moonActive ? GRAVITY * LOW_GRAV_FACTOR : GRAVITY;
       b.vy += grav * dt;
       b.x  += b.vx * dt;
       b.y  += b.vy * dt;
@@ -1109,6 +1127,7 @@
         const d2 = dx * dx + dy * dy;
         const md = BALL_R + PEG_R;
         if (d2 < md * md && d2 > 0.0001) {
+          const isGold = p === goldPeg;
           const d = Math.sqrt(d2);
           const nx = dx / d, ny = dy / d;
           b.x = p.x + nx * md;
@@ -1145,6 +1164,12 @@
               b.vy -= (1 + RESTITUTION) * vn * ny;
             }
             b.vx += (Math.random() - 0.5) * 60;
+          }
+          // Gold peg: +100% speed for 3s, moon-gravity-immune, 10s cooldown.
+          if (isGold && now >= (b.speedCdUntil || 0)) {
+            b.vx *= 2; b.vy *= 2;
+            b.speedUntil = now + 3000;
+            b.speedCdUntil = now + 10000;
           }
         }
       }
@@ -1198,7 +1223,10 @@
           }
           b.vx += am.mv.vx * 0.35 + (Math.random() - 0.5) * 110;
           // Only a top-of-bar hit (ball above it) triggers low gravity.
-          if (state.upg.lowGrav >= 1 && ny < -0.3) b.lowGravUntil = now + 1000;
+          if (state.upg.lowGrav >= 1 && ny < -0.3 && now >= (b.lowGravCdUntil || 0)) {
+            b.lowGravUntil = now + 1000;
+            b.lowGravCdUntil = now + 10000;
+          }
         }
       }
 
@@ -1352,17 +1380,21 @@
     const now = performance.now();
 
     const spin = pegSpinAngle();
-    for (const p of pegs) {
+    for (let pi = 0; pi < pegs.length; pi++) {
+      const p = pegs[pi];
+      const gold = pi === goldPegIdx;
       ctx.save();
       ctx.translate(p.x, p.y);
       if (spin) ctx.rotate(spin);
       const g = ctx.createLinearGradient(0, -PEG_R, 0, PEG_R);
-      g.addColorStop(0, '#ffffff');
-      g.addColorStop(1, '#8a92b8');
+      if (gold) { g.addColorStop(0, '#fff3b0'); g.addColorStop(1, '#e0a51e'); }
+      else { g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#8a92b8'); }
       ctx.fillStyle = g;
+      if (gold) { ctx.shadowColor = '#ffd75a'; ctx.shadowBlur = 14; }
       triPath(0, 0, PEG_R); ctx.fill();
-      ctx.strokeStyle = '#4a517a';
-      ctx.lineWidth = 1; ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = gold ? '#a8780f' : '#4a517a';
+      ctx.lineWidth = gold ? 2 : 1; ctx.stroke();
       ctx.restore();
     }
 
