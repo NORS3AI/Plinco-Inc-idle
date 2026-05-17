@@ -191,10 +191,13 @@
     const m = chamberMultiplier();
     const n = chamberCount();
     const arr = [];
-    // 1ch:[1] 2ch:[2,2] 3ch:[3,4,3] 4ch:[4,5,5,4] 5ch:[5,6,7,6,5]
-    // edge = n, +1 per step toward center; x2-upgrade still scales it.
+    // Center-weighted (edge=n, +1 toward centre) PLUS a left-side bonus of +n
+    // so the two sides differ. e.g. 2ch -> [4,2], 3ch -> [6,4,3].
+    const center = (n - 1) / 2;
     for (let i = 0; i < n; i++) {
-      arr.push(m * (n + Math.min(i, n - 1 - i)));
+      const base = n + Math.min(i, n - 1 - i);
+      const leftBonus = i < center ? n : 0;
+      arr.push(m * (base + leftBonus));
     }
     return arr;
   }
