@@ -94,6 +94,8 @@
     crit: 0,
     recharge: 0,
     rows: 0,        // 0..4  -> rows = 2 + rows  (board 2..6)
+    airtime: 0,     // 0/1   -> air-time bonus (up to +3g)
+    airtimePlus: 0, // 0..10 -> +10% airtime bonus per level
     pegSpin: 0,     // 0/1   -> main pegs spin (cosmetic)
     pegSpinSpeed: 0,// 0..7  -> spin speed boost
     tinyPegs: 0,    // 0..5  -> bonus pegs per side per big peg
@@ -429,6 +431,21 @@
       cost: () => 1000 * Math.pow(10, state.upg.rows),
       desc: () => `Board: ${chamberCount()} rows. Adds row ${chamberCount() + 1} (+1 chamber, max 6 rows).`,
       buy() { state.upg.rows++; },
+    },
+    {
+      id: 'airtime', name: 'Airtime', unlockAt: 500, maxLevel: 1,
+      level: () => state.upg.airtime, cost: () => 600,
+      desc: () => state.upg.airtime >= 1
+        ? 'Longer time in the air = up to +3g bonus on landing.'
+        : 'Bonus of up to +3g based on how long the ball stays airborne.',
+      buy() { state.upg.airtime = 1; },
+    },
+    {
+      id: 'airtimePlus', name: 'Airtime+', unlockAt: 1000, maxLevel: 10,
+      level: () => state.upg.airtimePlus,
+      cost: () => 1200 * Math.pow(2, state.upg.airtimePlus),
+      desc: () => `+10% Airtime bonus per level. Now +${10 * state.upg.airtimePlus}%. Lv ${state.upg.airtimePlus}/10.`,
+      buy() { state.upg.airtimePlus++; },
     },
     {
       id: 'pegSpin', name: 'Spinning Pegs', unlockAt: 5, maxLevel: 1,
@@ -1102,6 +1119,10 @@
         let value = values[idx] * b.mult;
         const isCrit = Math.random() < critChance();
         if (isCrit) value = Math.ceil(value * 1.1);
+        if (state.upg.airtime >= 1) {
+          const airMult = 1 + 0.10 * state.upg.airtimePlus;
+          value += Math.round(Math.min(3, b.age) * airMult);
+        }
         addGold(value);
         sfx('score');
         state.floaters.push({
