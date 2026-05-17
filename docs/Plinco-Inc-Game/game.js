@@ -1204,9 +1204,21 @@
 
       if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * WALL_RESTITUTION; }
       if (b.x + BALL_R > W) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * WALL_RESTITUTION; }
-      if (b.y - BALL_R < CEIL_Y) {
-        b.y = CEIL_Y + BALL_R;
-        if (b.vy < 0) b.vy = -b.vy * WALL_RESTITUTION;
+      {
+        // Zig-zag ceiling: triangle tips point down; the tip bounces harder.
+        const half = CEIL_TOOTH / 2;
+        const lx = ((b.x % CEIL_TOOTH) + CEIL_TOOTH) % CEIL_TOOTH;
+        const offset = Math.abs(lx - half);          // 0 at the point
+        const surfaceY = CEIL_Y * (1 - offset / half);
+        if (b.y - BALL_R < surfaceY) {
+          b.y = surfaceY + BALL_R;
+          if (b.vy < 0) {
+            const atPoint = offset < CEIL_TOOTH * 0.22;
+            b.vy = -b.vy * (atPoint ? 1.3 : WALL_RESTITUTION);
+            if (atPoint) b.vx += (Math.random() - 0.5) * 130;     // hard scatter
+            else b.vx += (lx < half ? -1 : 1) * 60;               // slide off slope
+          }
+        }
       }
 
       // Score the instant the ball enters the slot (or if it ever gets stuck)
