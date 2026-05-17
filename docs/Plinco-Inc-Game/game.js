@@ -14,7 +14,7 @@
   const voidOverlay = document.getElementById('voidOverlay');
   const voidCloseBtn = document.getElementById('voidCloseBtn');
   const vpBalance = document.getElementById('vpBalance');
-  const vpList = document.getElementById('vpList');
+  const vpCanvas = document.getElementById('vpCanvas');
   const prestigeBtn = document.getElementById('prestigeBtn');
   const ffBtn = document.getElementById('ffBtn');
 
@@ -53,7 +53,8 @@
   // gap from last peg row to the slot — tunable via Debug settings for now
 
   let LO = null;                 // current frame's board layout
-  let gravityLowUntil = 0;       // half-gravity window after a bar strike
+  let gravityLowUntil = 0;       // low-gravity window after a bar strike (upgrade)
+  const LOW_GRAV_FACTOR = 0.1;   // gravity while the effect is active
 
   const BALL_R = 8;
   const GRAVITY = 700;
@@ -102,6 +103,7 @@
     tinyWorth: 0,   // 0..25 -> +2 flat bonus peg gold per level (cap +50)
     tinyValue: 0,   // 0..5  -> bonus peg worth x4 per level
     movers: 0,      // 0..5  -> moving bars between rows
+    lowGrav: 0,     // 0/1   -> bar strike triggers low gravity 5s
     randomDrop: 0,  // 0/1   -> random "rain" drop instead of dead center
     upgradeAll: 0,  // 0/1   -> unlocks the Upgrade All button
     autoDrop: 0,
@@ -127,8 +129,13 @@
   const defaultVpUpg = () => ({
     startGold: 0,   // +10g start per level (max 50)
     earnRate: 0,    // +25% VP per level (max 10)
-    discount: 0,    // prestige req x0.9 per level (max 10)
+    earnRate2: 0,   // +10% VP per level (max 5)
+    discount: 0,    // lowers VP divisor (max 10)
     fastFwd: 0,     // 0/1 unlock 2x speed toggle
+    autoStart: 0,   // 0/1 start runs with Auto-Dropper
+    critStart: 0,   // start runs with N crit levels (max 10)
+    pegStart: 0,    // start runs with N Bonus Peg levels (max 5)
+    valueStart: 0,  // start runs with N Chamber Value levels (max 12)
   });
 
   const state = {
@@ -278,13 +285,7 @@
   // ---- Upgrade math ----
   function critChance() { return state.upg.crit * 0.01; }
   function critCost(level) {
-    let c = 50;
-    for (let i = 0; i < level; i++) {
-      if (c < 100) c += 10;
-      else if (c < 1000) c += 50;
-      else c += 250;
-    }
-    return c;
+    return Math.round(150 * Math.pow(1.55, level));   // steep, capped at lv 100
   }
 
   const RECHARGE_MAX_LEVEL = 14;
@@ -340,7 +341,7 @@
   function startingGold() { return state.vpUpg.startGold * 10; }
   // Logarithmic VP: ~1 at 1M, ~3 at 1T, ~4 at 1Qi. Discount lowers the divisor.
   function vpDivisor() { return Math.max(2, 4 - 0.2 * state.vpUpg.discount); }
-  function vpEarnMult() { return 1 + 0.25 * state.vpUpg.earnRate; }
+  function vpEarnMult() { return 1 + 0.25 * state.vpUpg.earnRate + 0.10 * state.vpUpg.earnRate2; }
   function vpGain() {
     const g = Math.max(1, state.maxGold);
     return Math.floor((Math.log10(g) / vpDivisor()) * vpEarnMult());
@@ -357,6 +358,7 @@
     state.vp += gain;
     // Full run reset; VP, VP upgrades, settings, prestige flag persist.
     state.upg = defaultUpg();
+    applyStartingBonuses();
     state.seen = {};
     state.balls = [];
     state.floaters = [];
@@ -366,8 +368,17 @@
     state.maxGold = state.gold;
     save();
     renderPanel();
-    renderVpPanel();
+    openVoid();              // go to the talent-tree screen
   }
+
+  // VP "new game+" head starts applied to a fresh run.
+  function applyStartingBonuses() {
+    state.upg.crit = Math.min(100, state.vpUpg.critStart);
+    state.upg.tinyPegs = Math.min(5, state.vpUpg.pegStart);
+    state.upg.chamberValue = Math.min(12, state.vpUpg.valueStart);
+    state.upg.autoDrop = state.vpUpg.autoStart >= 1 ? 1 : 0;
+  }
+  function unspentVpMult() { return 1 + 0.10 * state.vp; }
 
   // ---- Upgrade definitions ----
   function ballUpg(tier) {
@@ -387,13 +398,13 @@
 
   // attach economy data to tiers
   const TIER_ECON = {
-    ballGold:    { cost: 1000,          unlockAt: 800 },
-    ballGreen:   { cost: 10000,         unlockAt: 8000 },
-    ballBlue:    { cost: 100000,        unlockAt: 80000 },
-    ballRed:     { cost: 500000,        unlockAt: 400000 },
-    ballOrange:  { cost: 10000000,      unlockAt: 8000000 },
-    ballPink:    { cost: 50000000,      unlockAt: 40000000 },
-    ballRainbow: { cost: 5000000000,    unlockAt: 3000000000 },
+    ballGold:    { cost: 1000,           unlockAt: 800 },
+    ballGreen:   { cost: 10000,          unlockAt: 8000 },
+    ballBlue:    { cost: 1000000,        unlockAt: 750000 },
+    ballRed:     { cost: 50000000,       unlockAt: 40000000 },
+    ballOrange:  { cost: 5000000000,     unlockAt: 4000000000 },
+    ballPink:    { cost: 500000000000,   unlockAt: 400000000000 },
+    ballRainbow: { cost: 50000000000000, unlockAt: 40000000000000 },
   };
   for (const t of BALL_TIERS) Object.assign(t, TIER_ECON[t.id]);
 
@@ -406,7 +417,7 @@
       buy() { state.upg.chamberValue++; },
     },
     {
-      id: 'crit', name: 'Critical Chance', unlockAt: 30, maxLevel: 1000,
+      id: 'crit', name: 'Critical Chance', unlockAt: 30, maxLevel: 100,
       level: () => state.upg.crit, cost: () => critCost(state.upg.crit),
       desc: () => `+1% crit chance per level (crit = +10% payout). Now: ${state.upg.crit}%.`,
       buy() { state.upg.crit++; },
@@ -489,9 +500,17 @@
       cost: () => [1000, 10000, 100000, 1000000, 1000000000][state.upg.movers],
       desc: () => {
         const next = state.upg.movers + 1;
-        return `Bar ${next}/5 between rows ${next} & ${next + 1}: slides across, balls bounce off it & gravity halves for 3s. Each bar moves on its own.`;
+        return `Bar ${next}/5 between rows ${next} & ${next + 1}: slides across, balls bounce off it. Each bar moves on its own.`;
       },
       buy() { state.upg.movers++; },
+    },
+    {
+      id: 'lowGrav', name: 'Low Gravity', unlockAt: 600, maxLevel: 1,
+      level: () => state.upg.lowGrav, cost: () => 650,
+      desc: () => state.upg.lowGrav >= 1
+        ? 'Striking a moving bar drops gravity hard for 5s.'
+        : 'When a ball hits a moving bar, gravity is greatly reduced for 5 seconds.',
+      buy() { state.upg.lowGrav = 1; },
     },
     {
       id: 'autoDrop', name: 'Auto-Dropper', unlockAt: 2500, maxLevel: 1,
@@ -632,89 +651,137 @@
     if (e.target === settingsOverlay) closeSettings();
   });
 
-  // ---- Void Points menu ----
-  const VP_UPGRADES = [
-    {
-      id: 'startGold', name: 'Starting Gold', max: 50,
-      level: () => state.vpUpg.startGold,
-      cost: () => 1,
-      desc: () => `Start each run with +10g per level. Now +${fmt(startingGold())}g. Lv ${state.vpUpg.startGold}/50.`,
-      buy() { state.vpUpg.startGold++; },
-    },
-    {
-      id: 'earnRate', name: 'VP Earn Rate', max: 10,
-      level: () => state.vpUpg.earnRate,
-      cost: () => 2 * Math.pow(2, state.vpUpg.earnRate),
-      desc: () => `+25% Void Points per prestige. Now x${vpEarnMult().toFixed(2)}. Lv ${state.vpUpg.earnRate}/10.`,
-      buy() { state.vpUpg.earnRate++; },
-    },
-    {
-      id: 'discount', name: 'Prestige Yield', max: 10,
-      level: () => state.vpUpg.discount,
-      cost: () => 3 * Math.pow(2, state.vpUpg.discount),
-      desc: () => `Lowers the VP divisor (more VP per prestige). Now ÷${vpDivisor().toFixed(1)}. Lv ${state.vpUpg.discount}/10.`,
-      buy() { state.vpUpg.discount++; },
-    },
-    {
-      id: 'fastFwd', name: 'Fast Forward', max: 1,
-      level: () => state.vpUpg.fastFwd,
-      cost: () => 10,
-      desc: () => state.vpUpg.fastFwd >= 1
-        ? 'Unlocked: tap "FF" in the top bar for 2x speed.'
-        : 'Unlocks a 2x game-speed toggle in the top bar.',
-      buy() { state.vpUpg.fastFwd = 1; },
-    },
-  ];
+  // ---- Void Points talent tree ----
+  const TAU = Math.PI * 2;
+  const R1 = 155, R2 = 250;
+  const VC = vpCanvas.width / 2, VCY = vpCanvas.height / 2;
+  const NODE_R = 46;
 
-  function buyVp(u) {
-    if (u.level() >= u.max || state.vp < u.cost()) return;
-    state.vp -= u.cost();
-    u.buy();
+  // ring1 angles (6 around the centre), ring2 hang off their parent's angle.
+  const A = i => -Math.PI / 2 + i * (TAU / 6);
+  const VP_TREE = [
+    { id: 'startGold', label: 'Start Gold', sub: '+10g/run', field: 'startGold',
+      max: 50, cost: () => 1, parent: null, ring: 0, ang: 0 },
+
+    { id: 'earnRate', label: 'VP Rate', sub: '+25%/lvl', field: 'earnRate',
+      max: 10, cost: l => 2 * 2 ** l, parent: 'startGold', ring: 1, ang: A(0) },
+    { id: 'discount', label: 'VP Yield', sub: 'lower ÷', field: 'discount',
+      max: 10, cost: l => 3 * 2 ** l, parent: 'startGold', ring: 1, ang: A(1) },
+    { id: 'critStart', label: 'Start Crit', sub: '+1 lvl/lvl', field: 'critStart',
+      max: 10, cost: l => 5 * 2 ** l, parent: 'startGold', ring: 1, ang: A(2) },
+    { id: 'fastFwd', label: 'Fast Fwd', sub: '2x toggle', field: 'fastFwd',
+      max: 1, cost: () => 10, parent: 'startGold', ring: 1, ang: A(3) },
+    { id: 'pegStart', label: 'Start Pegs', sub: 'bonus pegs', field: 'pegStart',
+      max: 5, cost: l => 8 * 2 ** l, parent: 'startGold', ring: 1, ang: A(4) },
+    { id: 'valueStart', label: 'Start Value', sub: 'chamber x2', field: 'valueStart',
+      max: 12, cost: l => 6 * 2 ** l, parent: 'startGold', ring: 1, ang: A(5) },
+
+    { id: 'earnRate2', label: 'VP Rate+', sub: '+10%/lvl', field: 'earnRate2',
+      max: 5, cost: l => 12 * 2 ** l, parent: 'earnRate', ring: 2, ang: A(0) },
+    { id: 'autoStart', label: 'Start Auto', sub: 'auto-drop', field: 'autoStart',
+      max: 1, cost: () => 25, parent: 'fastFwd', ring: 2, ang: A(3) },
+  ];
+  const VP_BY_ID = Object.fromEntries(VP_TREE.map(n => [n.id, n]));
+  function vpNodePos(n) {
+    const r = n.ring === 0 ? 0 : n.ring === 1 ? R1 : R2;
+    return { x: VC + Math.cos(n.ang) * r, y: VCY + Math.sin(n.ang) * r };
+  }
+  const vpLvl = n => state.vpUpg[n.field] || 0;
+  const vpBought = n => vpLvl(n) >= 1;
+  function vpUnlocked(n) {                       // prerequisite met
+    return n.parent === null ? true : vpBought(VP_BY_ID[n.parent]);
+  }
+  function vpVisible(n) {                        // shown on the tree
+    if (n.ring <= 1) return true;
+    return vpBought(VP_BY_ID[n.parent]);
+  }
+  function vpNodeCost(n) { return n.cost(vpLvl(n)); }
+  function vpCanBuy(n) {
+    return vpVisible(n) && vpUnlocked(n) && vpLvl(n) < n.max && state.vp >= vpNodeCost(n);
+  }
+  function buyVpNode(n) {
+    if (!vpCanBuy(n)) return;
+    state.vp -= vpNodeCost(n);
+    state.vpUpg[n.field] = vpLvl(n) + 1;
     save();
-    renderVpPanel();
+    drawVpTree();
   }
 
   let voidOpen = false;
-  function renderVpPanel() {
+  function drawVpTree() {
     if (!voidOpen) return;
     vpBalance.textContent = fmt(state.vp) + ' VP';
     const gain = vpGain();
-    prestigeBtn.textContent = gain > 0
-      ? `Prestige  (+${fmt(gain)} VP)`
-      : `Prestige  (earn more gold)`;
+    prestigeBtn.textContent = gain > 0 ? `Prestige (+${fmt(gain)})` : 'Prestige';
     prestigeBtn.disabled = gain <= 0;
-    vpList.innerHTML = '';
-    for (const u of VP_UPGRADES) {
-      const lvl = u.level();
-      const maxed = lvl >= u.max;
-      const row = document.createElement('div');
-      row.className = 'upg';
-      const info = document.createElement('div');
-      info.className = 'upg-info';
-      const name = document.createElement('div');
-      name.className = 'upg-name';
-      name.textContent = u.name;
-      const desc = document.createElement('div');
-      desc.className = 'upg-desc';
-      desc.textContent = u.desc();
-      info.appendChild(name); info.appendChild(desc);
-      const btn = document.createElement('button');
-      btn.className = 'buy-btn';
-      if (maxed) { btn.classList.add('maxed'); btn.textContent = u.max === 1 ? 'OWNED' : 'MAX'; btn.disabled = true; }
+
+    const c = vpCanvas.getContext('2d');
+    c.clearRect(0, 0, vpCanvas.width, vpCanvas.height);
+
+    // links first
+    for (const n of VP_TREE) {
+      if (!n.parent || !vpVisible(n)) continue;
+      const p = VP_BY_ID[n.parent];
+      const a = vpNodePos(p), b = vpNodePos(n);
+      const lit = vpBought(p) && vpBought(n);
+      c.strokeStyle = lit ? '#9b7bff' : '#2c2550';
+      c.lineWidth = lit ? 5 : 3;
+      if (lit) { c.shadowColor = '#9b7bff'; c.shadowBlur = 12; }
+      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+      c.shadowBlur = 0;
+    }
+    // nodes
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    for (const n of VP_TREE) {
+      if (!vpVisible(n)) continue;
+      const pos = vpNodePos(n);
+      const lvl = vpLvl(n), maxed = lvl >= n.max;
+      const unlocked = vpUnlocked(n);
+      let fill, ring;
+      if (maxed) { fill = '#1f3a26'; ring = '#5fce8a'; }
+      else if (!unlocked) { fill = '#1a1730'; ring = '#39335c'; }
+      else if (state.vp >= vpNodeCost(n)) { fill = '#3a2f12'; ring = '#f5c842'; }
+      else { fill = '#241f3d'; ring = '#6a5fa0'; }
+      c.beginPath(); c.arc(pos.x, pos.y, NODE_R, 0, TAU);
+      c.fillStyle = fill; c.fill();
+      c.lineWidth = 4; c.strokeStyle = ring; c.stroke();
+
+      c.fillStyle = '#fff';
+      c.font = 'bold 16px system-ui, sans-serif';
+      c.fillText(n.label, pos.x, pos.y - 16);
+      c.fillStyle = '#9aa0c8';
+      c.font = '12px system-ui, sans-serif';
+      c.fillText(n.sub, pos.x, pos.y + 1);
+      c.font = 'bold 13px system-ui, sans-serif';
+      if (maxed) { c.fillStyle = '#5fce8a'; c.fillText('MAX', pos.x, pos.y + 18); }
+      else if (!unlocked) { c.fillStyle = '#6a6f9a'; c.fillText('locked', pos.x, pos.y + 18); }
       else {
-        btn.textContent = fmt(u.cost()) + ' VP';
-        btn.disabled = state.vp < u.cost();
-        btn.addEventListener('pointerup', (e) => { e.preventDefault(); buyVp(u); });
+        c.fillStyle = state.vp >= vpNodeCost(n) ? '#f5c842' : '#8b91b5';
+        c.fillText(fmt(vpNodeCost(n)) + ' VP', pos.x, pos.y + 18);
       }
-      row.appendChild(info); row.appendChild(btn);
-      vpList.appendChild(row);
+      if (n.max > 1) {
+        c.fillStyle = '#7c83a8';
+        c.font = '11px system-ui, sans-serif';
+        c.fillText(`${lvl}/${n.max}`, pos.x, pos.y + 33);
+      }
     }
   }
-  function openVoid() { voidOpen = true; voidOverlay.hidden = false; renderVpPanel(); }
+  function openVoid() { voidOpen = true; voidOverlay.hidden = false; drawVpTree(); }
   function closeVoid() { voidOpen = false; voidOverlay.hidden = true; }
   voidBtn.addEventListener('click', openVoid);
-  voidCloseBtn.addEventListener('click', closeVoid);
-  voidOverlay.addEventListener('click', (e) => { if (e.target === voidOverlay) closeVoid(); });
+  voidCloseBtn.addEventListener('click', closeVoid);   // "Play"
+  vpCanvas.addEventListener('pointerup', (e) => {
+    e.preventDefault();
+    const r = vpCanvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (vpCanvas.width / r.width);
+    const y = (e.clientY - r.top) * (vpCanvas.height / r.height);
+    for (const n of VP_TREE) {
+      if (!vpVisible(n)) continue;
+      const p = vpNodePos(n);
+      if ((x - p.x) ** 2 + (y - p.y) ** 2 <= NODE_R * NODE_R) { buyVpNode(n); break; }
+    }
+  });
   prestigeBtn.addEventListener('click', () => {
     const gain = vpGain();
     if (gain <= 0) return;
@@ -725,7 +792,7 @@
     state.fastForward = !state.fastForward;
     ffBtn.textContent = state.fastForward ? 'FF x2' : 'FF x1';
   });
-  setInterval(() => { if (voidOpen) renderVpPanel(); }, 300);
+  setInterval(() => { if (voidOpen) drawVpTree(); }, 300);
 
   function toggleSetting(key) {
     state.settings[key] = !state.settings[key];
@@ -995,7 +1062,7 @@
 
     const { pegs, tinies, values, n, cw, chamberTop } = LO;
     const now = performance.now();
-    const grav = now < gravityLowUntil ? GRAVITY * 0.5 : GRAVITY;
+    const grav = now < gravityLowUntil ? GRAVITY * LOW_GRAV_FACTOR : GRAVITY;
 
     // Spinning triangle pegs: precompute this frame's 3 vertex directions.
     const spinning = state.upg.pegSpin >= 1;
@@ -1075,7 +1142,7 @@
             b.vy -= (1 + RESTITUTION) * vn * ny;
           }
           b.vx += (Math.random() - 0.5) * 70;
-          const g = (meta.gold + tinyWorthAdd()) * tinyValueMult();
+          const g = Math.round((meta.gold + tinyWorthAdd()) * tinyValueMult() * unspentVpMult());
           addGold(g);
           state.floaters.push({
             x: tp.x, y: tp.y - 8,
@@ -1106,7 +1173,7 @@
             b.vy -= 1.9 * vn * ny;
           }
           b.vx += am.mv.vx * 0.35 + (Math.random() - 0.5) * 110;
-          gravityLowUntil = now + 3000;        // half gravity for 3s
+          if (state.upg.lowGrav >= 1) gravityLowUntil = now + 5000;  // low gravity 5s
         }
       }
 
@@ -1121,8 +1188,10 @@
         if (isCrit) value = Math.ceil(value * 1.1);
         if (state.upg.airtime >= 1) {
           const airMult = 1 + 0.10 * state.upg.airtimePlus;
-          value += Math.round(Math.min(3, b.age) * airMult);
+          // +50g cap at 20s aloft, scaled linearly (2.5g/s)
+          value += Math.round(Math.min(50, b.age * 2.5) * airMult);
         }
+        value = Math.round(value * unspentVpMult());   // unspent VP: +10%/VP
         addGold(value);
         sfx('score');
         state.floaters.push({

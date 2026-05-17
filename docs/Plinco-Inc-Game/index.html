@@ -39,22 +39,14 @@
     </div>
   </div>
 
-  <div id="voidOverlay" class="overlay" hidden>
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Void Points</h2>
-        <button id="voidCloseBtn" class="close-btn" aria-label="Close">&times;</button>
-      </div>
-      <div class="upgrade-list">
-        <div class="set-row">
-          <span class="set-label">Void Points</span>
-          <span id="vpBalance" class="set-val">0 VP</span>
-        </div>
-        <button id="prestigeBtn" class="buy-btn danger upgrade-all-btn">Prestige</button>
-        <div class="section-label">VP Upgrades</div>
-        <div id="vpList"></div>
-      </div>
+  <div id="voidOverlay" class="void-screen" hidden>
+    <div class="void-top">
+      <button id="voidCloseBtn" class="menu-btn void-play">&#9654; Play</button>
+      <span id="vpBalance" class="vp-balance">0 VP</span>
+      <button id="prestigeBtn" class="buy-btn danger">Prestige</button>
     </div>
+    <canvas id="vpCanvas" class="vp-canvas" width="640" height="640"></canvas>
+    <div id="vpTip" class="vp-tip">Tap a node to spend VP. Unspent VP = +10% gold each.</div>
   </div>
 
   <div id="settingsOverlay" class="overlay" hidden>
