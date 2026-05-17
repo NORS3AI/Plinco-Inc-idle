@@ -1151,6 +1151,7 @@
         const md = BALL_R + PEG_R;
         if (d2 < md * md && d2 > 0.0001) {
           const isGold = p === goldPeg;
+          const preSpeed = Math.hypot(b.vx, b.vy);
           const d = Math.sqrt(d2);
           const nx = dx / d, ny = dy / d;
           b.x = p.x + nx * md;
@@ -1188,9 +1189,14 @@
             }
             b.vx += (Math.random() - 0.5) * 60;
           }
-          // Gold peg: +100% speed for 3s, moon-gravity-immune, 10s cooldown.
+          // Gold peg (ANY side): +100% speed for 10s, moon-immune, 10s cd.
           if (isGold && now >= (b.speedCdUntil || 0)) {
-            b.vx *= 2; b.vy *= 2;
+            const sp = Math.max(2 * preSpeed, 450);
+            let dx2 = b.vx, dy2 = b.vy;
+            let dl = Math.hypot(dx2, dy2);
+            if (dl < 1 || dx2 * nx + dy2 * ny < 0) { dx2 = nx; dy2 = ny; dl = 1; }
+            b.vx = (dx2 / dl) * sp;
+            b.vy = (dy2 / dl) * sp;
             b.lowGravUntil = 0;                // lose moon gravity instantly
             b.speedUntil = now + 10000;        // speed buff 10s
             b.speedCdUntil = now + 10000;
