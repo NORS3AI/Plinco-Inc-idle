@@ -59,7 +59,6 @@
   const LOW_GRAV_FACTOR = 0.1;   // moon gravity (per-ball) after a top-of-bar hit
   let goldPegIdx = -1;           // which spinning peg is currently gold
   let goldPegEndsAt = 0;
-  let goldPegNextAt = 0;
 
   const BALL_R = 8;
   const GRAVITY = 700;
@@ -1106,14 +1105,14 @@
       Math.atan2(0.85, -1) + sAng,
     ] : null;
 
-    // Random gold peg among the spinning pegs.
+    // One peg is always gold while spinning; the moment its window ends,
+    // a new peg becomes gold immediately (no gap).
     if (spinning && pegs.length) {
-      if (goldPegIdx < 0 && now >= goldPegNextAt) {
-        goldPegIdx = Math.floor(Math.random() * pegs.length);
+      if (goldPegIdx < 0 || now >= goldPegEndsAt) {
+        let i = Math.floor(Math.random() * pegs.length);
+        if (pegs.length > 1 && i === goldPegIdx) i = (i + 1) % pegs.length;
+        goldPegIdx = i;
         goldPegEndsAt = now + 5000;
-      } else if (goldPegIdx >= 0 && now >= goldPegEndsAt) {
-        goldPegIdx = -1;
-        goldPegNextAt = now + 4000 + Math.random() * 6000;
       }
     } else {
       goldPegIdx = -1;
@@ -1123,8 +1122,8 @@
     for (const b of state.balls) {
       if (b.done) continue;
       b.age += dt;
-      const speedActive = b.speedUntil && now < b.speedUntil;
-      const moonActive = !speedActive && b.lowGravUntil && now < b.lowGravUntil;
+      const moonImmune = b.moonImmuneUntil && now < b.moonImmuneUntil;
+      const moonActive = !moonImmune && b.lowGravUntil && now < b.lowGravUntil;
       const grav = moonActive ? GRAVITY * LOW_GRAV_FACTOR : GRAVITY;
       b.vy += grav * dt;
       b.x  += b.vx * dt;
@@ -1178,6 +1177,7 @@
             b.vx *= 2; b.vy *= 2;
             b.speedUntil = now + 3000;
             b.speedCdUntil = now + 10000;
+            b.moonImmuneUntil = now + 10000;   // no moon buff for 10s
           }
         }
       }
@@ -1231,7 +1231,8 @@
           }
           b.vx += am.mv.vx * 0.35 + (Math.random() - 0.5) * 110;
           // Only a top-of-bar hit (ball above it) triggers low gravity.
-          if (state.upg.lowGrav >= 1 && ny < -0.3 && now >= (b.lowGravCdUntil || 0)) {
+          if (state.upg.lowGrav >= 1 && ny < -0.3 &&
+              now >= (b.lowGravCdUntil || 0) && now >= (b.moonImmuneUntil || 0)) {
             b.lowGravUntil = now + 1000;
             b.lowGravCdUntil = now + 10000;
           }
