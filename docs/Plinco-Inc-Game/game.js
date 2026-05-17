@@ -161,7 +161,7 @@
   };
 
   // ---- Board geometry (dynamic) ----
-  function chamberCount() { return Math.min(6, 2 + state.upg.rows); }  // 2..6 (rows 1&2 free)
+  function chamberCount() { return Math.min(5, 2 + state.upg.rows); }  // 2..5 (rows 1&2 free)
   function rowsCount()    { return chamberCount(); }                   // peg rows = chambers
   function chamberW()     { return W / chamberCount(); }
 
@@ -205,9 +205,7 @@
   function computeLayout() {
     const R = rowsCount();
     const cw = chamberW();
-    // Cap the divisor at the 5-row value so the last (6-row) tier stays as
-    // spaced-out as the previous tier instead of bunching up.
-    const spacing = (W * 0.72) / Math.max(1, Math.min(R, 5) - 1);
+    const spacing = (W * 0.72) / Math.max(1, R - 1); // spread the pyramid
     const gapToSlot = state.settings.gapToSlot;
     const startY = SPAWN_Y + state.settings.entryGap;
     const tail = gapToSlot + CHAMBER_H;
@@ -307,7 +305,7 @@
   function rechargeCost(level) { return RECHARGE_COSTS[level]; }
   function cooldownMs() { return rechargeSeconds() * 1000; }
 
-  const ROWS_MAX_LEVEL = 4; // adds rows 3..6 (board 2..6)
+  const ROWS_MAX_LEVEL = 3; // adds rows 3..5 (board 2..5)
 
   // ---- Persistence ----
   const SAVE_KEY = 'plinco-inc-save-v1';
@@ -451,7 +449,7 @@
       id: 'rows', name: 'Add Row', unlockAt: 1000, maxLevel: ROWS_MAX_LEVEL,
       level: () => state.upg.rows,
       cost: () => 1000 * Math.pow(10, state.upg.rows),
-      desc: () => `Board: ${chamberCount()} rows. Adds row ${chamberCount() + 1} (+1 chamber, max 6 rows).`,
+      desc: () => `Board: ${chamberCount()} rows. Adds row ${chamberCount() + 1} (+1 chamber, max 5 rows).`,
       buy() { state.upg.rows++; },
     },
     {
