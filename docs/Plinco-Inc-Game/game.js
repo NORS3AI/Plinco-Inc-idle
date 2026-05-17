@@ -1017,6 +1017,21 @@
   });
   function maxBalls() { return 5 + (state.vpUpg.ballCap || 0); }
 
+  function manualDrop() {
+    if (!overlay.hidden || !settingsOverlay.hidden || !voidOverlay.hidden) return;
+    if (state.cooldown <= 0 && state.balls.length < maxBalls()) {
+      dropBall();
+      state.cooldown = cooldownMs();
+    }
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.key === ' ') {
+      e.preventDefault();
+      ensureAudio();
+      manualDrop();
+    }
+  });
+
   // Distinct peg columns across all visible rows (deduped).
   function pegColumns() {
     const xs = [], seen = new Set();
