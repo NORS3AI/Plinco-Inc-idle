@@ -136,6 +136,9 @@
     critStart: 0,   // start runs with N crit levels (max 10)
     pegStart: 0,    // start runs with N Bonus Peg levels (max 5)
     valueStart: 0,  // start runs with N Chamber Value levels (max 12)
+    critCap: 0,     // +10 crit cap per level (max 10)
+    chamberCap: 0,  // +1 Chamber Value cap per level (max 5)
+    ballCap: 0,     // +1 max balls on screen per level (max 5)
   });
 
   const state = {
@@ -288,13 +291,14 @@
     return Math.round(150 * Math.pow(1.55, level));   // steep, capped at lv 100
   }
 
-  const RECHARGE_MAX_LEVEL = 14;
+  const RECHARGE_MAX_LEVEL = 5;
+  const RECHARGE_COSTS = [700, 15000, 120000, 1000000, 350000000];
   function rechargeSeconds() {
     const L = state.upg.recharge;
     if (L <= 0) return BASE_RECHARGE_S;
     return Math.max(0.1, BASE_RECHARGE_S - 0.3 - 0.2 * (L - 1));
   }
-  function rechargeCost(level) { return 250 + 500 * level; }
+  function rechargeCost(level) { return RECHARGE_COSTS[level]; }
   function cooldownMs() { return rechargeSeconds() * 1000; }
 
   const ROWS_MAX_LEVEL = 4; // adds rows 3..6 (board 2..6)
@@ -358,6 +362,7 @@
     state.vp += gain;
     // Full run reset; VP, VP upgrades, settings, prestige flag persist.
     state.upg = defaultUpg();
+    recomputeCaps();
     applyStartingBonuses();
     state.seen = {};
     state.balls = [];
@@ -423,9 +428,9 @@
       buy() { state.upg.crit++; },
     },
     {
-      id: 'recharge', name: 'Faster Recharge', unlockAt: 200, maxLevel: RECHARGE_MAX_LEVEL,
+      id: 'recharge', name: 'Faster Recharge', unlockAt: 500, maxLevel: RECHARGE_MAX_LEVEL,
       level: () => state.upg.recharge, cost: () => rechargeCost(state.upg.recharge),
-      desc: () => `Recharge: ${rechargeSeconds().toFixed(1)}s. −0.3s first level, then −0.2s (min 0.1s).`,
+      desc: () => `Recharge: ${rechargeSeconds().toFixed(1)}s. −0.3s first level, then −0.2s. Lv ${state.upg.recharge}/5.`,
       buy() { state.upg.recharge++; },
     },
     {
@@ -528,6 +533,15 @@
       buy() { state.upg.upgradeAll = 1; },
     },
   ];
+
+  // VP-driven dynamic caps on two upgrades.
+  const CRIT_UP = UPGRADES.find(u => u.id === 'crit');
+  const CHV_UP = UPGRADES.find(u => u.id === 'chamberValue');
+  function recomputeCaps() {
+    CRIT_UP.maxLevel = 100 + 10 * (state.vpUpg.critCap || 0);
+    CHV_UP.maxLevel = 12 + (state.vpUpg.chamberCap || 0);
+  }
+  recomputeCaps();
 
   function canBuy(u) { return u.level() < u.maxLevel && state.gold >= u.cost(); }
   function purchase(u) {
@@ -680,6 +694,12 @@
       max: 5, cost: l => 12 * 2 ** l, parent: 'earnRate', ring: 2, ang: A(0) },
     { id: 'autoStart', label: 'Start Auto', sub: 'auto-drop', field: 'autoStart',
       max: 1, cost: () => 25, parent: 'fastFwd', ring: 2, ang: A(3) },
+    { id: 'critCap', label: 'Crit Cap', sub: '+10/lvl', field: 'critCap',
+      max: 10, cost: l => (l < 5 ? 1 : 2), parent: 'critStart', ring: 2, ang: A(2) },
+    { id: 'chamberCap', label: 'Chamber Cap', sub: '+1/lvl', field: 'chamberCap',
+      max: 5, cost: l => (l < 3 ? 2 : 3), parent: 'valueStart', ring: 2, ang: A(5) },
+    { id: 'ballCap', label: 'Ball Cap', sub: '+1 ball/lvl', field: 'ballCap',
+      max: 5, cost: l => (l < 3 ? 2 : 3), parent: 'discount', ring: 2, ang: A(1) },
   ];
   const VP_BY_ID = Object.fromEntries(VP_TREE.map(n => [n.id, n]));
   function vpNodePos(n) {
@@ -703,6 +723,7 @@
     if (!vpCanBuy(n)) return;
     state.vp -= vpNodeCost(n);
     state.vpUpg[n.field] = vpLvl(n) + 1;
+    recomputeCaps();
     save();
     drawVpTree();
   }
@@ -980,11 +1001,12 @@
     ensureAudio();
     const p = canvasPoint(e);
     if (!tappedCoin(p)) return;
-    if (state.cooldown <= 0) {
+    if (state.cooldown <= 0 && state.balls.length < maxBalls()) {
       dropBall();
       state.cooldown = cooldownMs();
     }
   });
+  function maxBalls() { return 5 + (state.vpUpg.ballCap || 0); }
 
   // Distinct peg columns across all visible rows (deduped).
   function pegColumns() {
@@ -1039,7 +1061,7 @@
   function step(dt) {
     if (state.cooldown > 0) state.cooldown = Math.max(0, state.cooldown - dt * 1000);
 
-    if (state.upg.autoDrop >= 1 && state.cooldown <= 0) {
+    if (state.upg.autoDrop >= 1 && state.cooldown <= 0 && state.balls.length < maxBalls()) {
       dropBall();
       state.cooldown = cooldownMs();
     }
