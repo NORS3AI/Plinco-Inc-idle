@@ -1121,9 +1121,9 @@
       Math.atan2(0.85, -1) + sAng,
     ] : null;
 
-    // One peg is always gold while spinning; the moment its window ends,
-    // a new peg becomes gold immediately (no gap).
-    if (spinning && pegs.length) {
+    // One peg is always gold (spinning or not); when its window ends a new
+    // peg becomes gold immediately (no gap).
+    if (pegs.length) {
       if (goldPegIdx < 0 || now >= goldPegEndsAt) {
         let i = Math.floor(Math.random() * pegs.length);
         if (pegs.length > 1 && i === goldPegIdx) i = (i + 1) % pegs.length;
