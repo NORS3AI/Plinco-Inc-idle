@@ -247,6 +247,16 @@ h1 {
   font-weight: 600;
   color: #e9ecf7;
 }
+.set-hint {
+  font-size: 13px;
+  color: #8b91b5;
+  background: #1b1f37;
+  border: 1px solid #2a2f4d;
+  border-radius: 10px;
+  padding: 10px 14px;
+  line-height: 1.4;
+}
+.set-hint b { color: #f5c842; }
 .set-val {
   font-size: 13px;
   font-weight: 700;
