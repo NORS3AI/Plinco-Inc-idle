@@ -1173,9 +1173,10 @@
           // Gold peg: +100% speed for 3s, moon-gravity-immune, 10s cooldown.
           if (isGold && now >= (b.speedCdUntil || 0)) {
             b.vx *= 2; b.vy *= 2;
-            b.speedUntil = now + 3000;
+            b.lowGravUntil = 0;                // lose moon gravity instantly
+            b.speedUntil = now + 10000;        // speed buff 10s
             b.speedCdUntil = now + 10000;
-            b.moonImmuneUntil = now + 10000;   // no moon buff for 10s
+            b.moonImmuneUntil = now + 10000;   // moon-immune 10s
           }
         }
       }
