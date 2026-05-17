@@ -55,8 +55,7 @@
   // gap from last peg row to the slot — tunable via Debug settings for now
 
   let LO = null;                 // current frame's board layout
-  let gravityLowUntil = 0;       // low-gravity window after a bar strike (upgrade)
-  const LOW_GRAV_FACTOR = 0.1;   // gravity while the effect is active
+  const LOW_GRAV_FACTOR = 0.1;   // moon gravity (per-ball) after a top-of-bar hit
 
   const BALL_R = 8;
   const GRAVITY = 700;
@@ -1086,7 +1085,6 @@
 
     const { pegs, tinies, values, n, cw, chamberTop } = LO;
     const now = performance.now();
-    const grav = now < gravityLowUntil ? GRAVITY * LOW_GRAV_FACTOR : GRAVITY;
 
     // Spinning triangle pegs: precompute this frame's 3 vertex directions.
     const spinning = state.upg.pegSpin >= 1;
@@ -1100,6 +1098,8 @@
     for (const b of state.balls) {
       if (b.done) continue;
       b.age += dt;
+      const grav = (b.lowGravUntil && now < b.lowGravUntil)
+        ? GRAVITY * LOW_GRAV_FACTOR : GRAVITY;
       b.vy += grav * dt;
       b.x  += b.vx * dt;
       b.y  += b.vy * dt;
@@ -1198,7 +1198,7 @@
           }
           b.vx += am.mv.vx * 0.35 + (Math.random() - 0.5) * 110;
           // Only a top-of-bar hit (ball above it) triggers low gravity.
-          if (state.upg.lowGrav >= 1 && ny < -0.3) gravityLowUntil = now + 3000;
+          if (state.upg.lowGrav >= 1 && ny < -0.3) b.lowGravUntil = now + 1000;
         }
       }
 
