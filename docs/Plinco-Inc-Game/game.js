@@ -1195,7 +1195,8 @@
             b.vy -= 1.9 * vn * ny;
           }
           b.vx += am.mv.vx * 0.35 + (Math.random() - 0.5) * 110;
-          if (state.upg.lowGrav >= 1) gravityLowUntil = now + 5000;  // low gravity 5s
+          // Only a top-of-bar hit (ball above it) triggers low gravity.
+          if (state.upg.lowGrav >= 1 && ny < -0.3) gravityLowUntil = now + 3000;
         }
       }
 
