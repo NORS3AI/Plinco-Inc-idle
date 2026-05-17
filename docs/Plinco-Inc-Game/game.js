@@ -59,6 +59,8 @@
   const LOW_GRAV_FACTOR = 0.1;   // moon gravity (per-ball) after a top-of-bar hit
   let goldPegIdx = -1;           // which spinning peg is currently gold
   let goldPegEndsAt = 0;
+  let bonusChamberIdx = -1;      // chamber worth x2, rotates every 60s
+  let bonusChamberNextAt = 0;
 
   const BALL_R = 8;
   const GRAVITY = 700;
@@ -191,13 +193,9 @@
     const m = chamberMultiplier();
     const n = chamberCount();
     const arr = [];
-    // Center-weighted (edge=n, +1 toward centre) PLUS a left-side bonus of +n
-    // so the two sides differ. e.g. 2ch -> [4,2], 3ch -> [6,4,3].
-    const center = (n - 1) / 2;
+    // Symmetric, centre-weighted: edge=n, +1 per step toward the centre.
     for (let i = 0; i < n; i++) {
-      const base = n + Math.min(i, n - 1 - i);
-      const leftBonus = i < center ? n : 0;
-      arr.push(m * (base + leftBonus));
+      arr.push(m * (n + Math.min(i, n - 1 - i)));
     }
     return arr;
   }
@@ -1135,6 +1133,13 @@
     }
     const goldPeg = (goldPegIdx >= 0 && goldPegIdx < pegs.length) ? pegs[goldPegIdx] : null;
 
+    // Every 60s a random chamber becomes the x2 chamber.
+    if (now >= bonusChamberNextAt) {
+      bonusChamberIdx = Math.floor(Math.random() * n);
+      bonusChamberNextAt = now + 60000;
+    }
+    if (bonusChamberIdx >= n) bonusChamberIdx = n - 1;
+
     for (const b of state.balls) {
       if (b.done) continue;
       b.age += dt;
@@ -1284,7 +1289,8 @@
       // Score the instant the ball enters the slot (or if it ever gets stuck)
       if (!b.done && (b.y + BALL_R >= chamberTop || b.age > 14)) {
         const idx = Math.min(n - 1, Math.max(0, Math.floor(b.x / cw)));
-        let value = values[idx] * b.mult;
+        const chamberBase = values[idx] * (idx === bonusChamberIdx ? 2 : 1);
+        let value = chamberBase * b.mult;
         const isCrit = Math.random() < critChance();
         if (isCrit) value = Math.ceil(value * 1.1);
         if (state.upg.airtime >= 1) {
@@ -1458,6 +1464,10 @@
 
     ctx.fillStyle = '#1b2038';
     ctx.fillRect(0, chamberTop, W, CHAMBER_H);
+    if (bonusChamberIdx >= 0 && bonusChamberIdx < n) {
+      ctx.fillStyle = 'rgba(245,200,66,0.22)';
+      ctx.fillRect(bonusChamberIdx * cw, chamberTop, cw, CHAMBER_H);
+    }
     ctx.fillStyle = '#3a4070';
     ctx.fillRect(0, chamberTop, W, 2);
     for (let i = 1; i < n; i++) ctx.fillRect(i * cw - 1, chamberTop, 2, CHAMBER_H);
@@ -1472,9 +1482,12 @@
     for (let i = 0; i < n; i++) {
       const cx = i * cw + cw / 2;
       const v = values[i];
+      const isBonus = i === bonusChamberIdx;
+      const shown = isBonus ? v * 2 : v;
       const ratio = (v / chamberMultiplier()) / maxBase; // 1 center .. low edge
-      ctx.fillStyle = ratio > 0.66 ? '#f5c842' : ratio > 0.33 ? '#86d6ff' : '#9aa0c8';
-      ctx.fillText(cw >= 40 ? fmtShort(v) + 'g' : fmtShort(v), cx, cy);
+      ctx.fillStyle = isBonus ? '#ffd75a'
+        : ratio > 0.66 ? '#f5c842' : ratio > 0.33 ? '#86d6ff' : '#9aa0c8';
+      ctx.fillText((cw >= 40 ? fmtShort(shown) + 'g' : fmtShort(shown)) + (isBonus ? ' x2' : ''), cx, cy);
     }
   }
 
