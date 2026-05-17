@@ -380,7 +380,7 @@
   function applyStartingBonuses() {
     state.upg.crit = Math.min(100, state.vpUpg.critStart);
     state.upg.tinyPegs = Math.min(5, state.vpUpg.pegStart);
-    state.upg.chamberValue = Math.min(12, state.vpUpg.valueStart);
+    state.upg.chamberValue = Math.min(CHV_UP.maxLevel, state.vpUpg.valueStart);
     state.upg.autoDrop = state.vpUpg.autoStart >= 1 ? 1 : 0;
   }
   function unspentVpMult() { return 1 + 0.10 * state.vp; }
@@ -415,7 +415,7 @@
 
   const UPGRADES = [
     {
-      id: 'chamberValue', name: 'Chamber Value x2', unlockAt: 10, maxLevel: 12,
+      id: 'chamberValue', name: 'Chamber Value x2', unlockAt: 10, maxLevel: 5,
       level: () => state.upg.chamberValue,
       cost: () => chamberValueCost(state.upg.chamberValue),
       desc: () => `Doubles every chamber payout (compounding). Now x${fmt(chamberMultiplier())}.`,
@@ -539,7 +539,7 @@
   const CHV_UP = UPGRADES.find(u => u.id === 'chamberValue');
   function recomputeCaps() {
     CRIT_UP.maxLevel = 100 + 10 * (state.vpUpg.critCap || 0);
-    CHV_UP.maxLevel = 12 + (state.vpUpg.chamberCap || 0);
+    CHV_UP.maxLevel = 5 + (state.vpUpg.chamberCap || 0);
   }
   recomputeCaps();
 
