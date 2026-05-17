@@ -36,6 +36,7 @@
   const dbgFlank = document.getElementById('dbgFlank');
   const dbgFlankVal = document.getElementById('dbgFlankVal');
   const dbgReset = document.getElementById('dbgReset');
+  const dbgVp = document.getElementById('dbgVp');
   const devLock = document.getElementById('devLock');
   const devUnlockBtn = document.getElementById('devUnlockBtn');
   const debugSection = document.getElementById('debugSection');
@@ -205,7 +206,9 @@
   function computeLayout() {
     const R = rowsCount();
     const cw = chamberW();
-    const spacing = (W * 0.72) / Math.max(1, R - 1); // spread the pyramid across the board
+    // Cap the divisor at the 5-row value so the last (6-row) tier stays as
+    // spaced-out as the previous tier instead of bunching up.
+    const spacing = (W * 0.72) / Math.max(1, Math.min(R, 5) - 1);
     const gapToSlot = state.settings.gapToSlot;
     const startY = SPAWN_Y + state.settings.entryGap;
     const tail = gapToSlot + CHAMBER_H;
@@ -858,6 +861,11 @@
     if (!confirm('Delete your game and start completely over? This cannot be undone.')) return;
     try { localStorage.removeItem(SAVE_KEY); } catch {}
     location.reload();
+  });
+  dbgVp.addEventListener('click', () => {
+    state.vp += 1;
+    save();
+    if (voidOpen) drawVpTree();
   });
   devUnlockBtn.addEventListener('click', () => {
     const pw = prompt("Developer's Kitchen — enter password:");
