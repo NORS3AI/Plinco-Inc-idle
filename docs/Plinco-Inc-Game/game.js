@@ -37,6 +37,8 @@
   const dbgFlankVal = document.getElementById('dbgFlankVal');
   const dbgReset = document.getElementById('dbgReset');
   const dbgVp = document.getElementById('dbgVp');
+  const dbgVpMinus = document.getElementById('dbgVpMinus');
+  const dbgGoldClear = document.getElementById('dbgGoldClear');
   const devLock = document.getElementById('devLock');
   const devUnlockBtn = document.getElementById('devUnlockBtn');
   const debugSection = document.getElementById('debugSection');
@@ -837,6 +839,11 @@
   dbgGold500.addEventListener('click', () => debugAddGold(500));
   dbgGold1k.addEventListener('click', () => debugAddGold(1000));
   dbgGold10k.addEventListener('click', () => debugAddGold(10000));
+  dbgGoldClear.addEventListener('click', () => {
+    state.gold = 0;
+    save();
+    dbgGoldNow.textContent = fmt(state.gold) + 'g';
+  });
   dbgGap.addEventListener('input', () => {
     const v = Math.max(12, Math.min(1000, parseInt(dbgGap.value, 10) || 125));
     state.settings.gapToSlot = v;
@@ -862,6 +869,11 @@
   });
   dbgVp.addEventListener('click', () => {
     state.vp += 1;
+    save();
+    if (voidOpen) drawVpTree();
+  });
+  dbgVpMinus.addEventListener('click', () => {
+    state.vp = Math.max(0, state.vp - 1);
     save();
     if (voidOpen) drawVpTree();
   });
